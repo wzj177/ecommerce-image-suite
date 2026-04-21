@@ -50,7 +50,8 @@
       "zh_title": "同 zh",
       "en_title": "同 en",
       "zh_desc": "中文说明（≤15字，描述该卖点的具体优势）",
-      "en_desc": "English description (≤12 words, specific benefit)"
+      "en_desc": "English description (≤12 words, specific benefit)",
+      "visual_keywords": ["English keyword1 (for magnifier bubble)", "English keyword2"]
     },
     {
       "icon": "fit",

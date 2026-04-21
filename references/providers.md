@@ -2,21 +2,43 @@
 
 ## 支持的供应商（5个）
 
-| 供应商 | 模型 | 定价 | 适合场景 | 国内访问 |
-|--------|------|------|---------|---------|
-| OpenAI DALL·E 3 | dall-e-3 | $0.04-0.08/张 | 高质量写实/场景图 | 需代理 |
-| Google Gemini Imagen 3 | imagen-3.0-generate-001 | $0.03/张 | 高质量写实，细节好 | 需代理 |
-| Stability AI | stable-image-core | $0.03/张 | 精准控制，白底图好 | 需代理 |
-| 千问 | qwen-image-2.0-pro | ¥0.14/张 | 国内电商场景优化 | ✅直连 |
-| 豆包（即梦） | doubao-seedream-3-0-t2i-250415 | ¥0.12/张 | 中文场景，风格多样 | ✅直连 |
+| 供应商 | 模型 | 定价 | 适合场景 | 参考图支持 | 国内访问 |
+|--------|------|------|---------|-----------|---------|
+| OpenAI | dall-e-3 / gpt-image-1.5 | $0.04-0.2/张 | 高质量写实/场景图 | gpt-image ✅ | 需代理 |
+| Google Gemini | gemini-3.1-flash-image-preview | $0.03/张 | 高质量写实，细节好 | ✅ 原生 | 需代理 |
+| Stability AI | stable-image-core | $0.03/张 | 精准控制，白底图好 | ❌ | 需代理 |
+| 千问 | wan2.7-image-pro | ¥0.14/张 | 国内电商场景优化 | ✅ | ✅直连 |
+| 豆包（即梦） | doubao-seedream-4-5-251128 | ¥0.12/张 | 中文场景，风格多样 | ✅ | ✅直连 |
 
 ---
 
-## OpenAI DALL·E 3
+## OpenAI
 
-**API Endpoint:** `https://api.openai.com/v1/images/generations`
+**默认模型:** `dall-e-3`（环境变量 `OPENAI_MODEL` 可覆盖为 `gpt-image-1.5`）
+
+**API Endpoints:**
+- 纯文生图：`/v1/images/generations`
+- 图生图（参考图）：`/v1/images/edits`
+
 **Key获取:** https://platform.openai.com/api-keys
 
+**模型选择与参考图支持：**
+
+| 模型 | 参考图 | 说明 | 推荐场景 |
+|------|-------|------|---------|
+| `gpt-image-1.5` | ✅ 支持 | 最新 GPT Image，支持 edits，高保真参考图 | **电商套图首选** |
+| `gpt-image-1` | ✅ 支持 | 上一代 GPT Image | 成本敏感场景 |
+| `gpt-image-1-mini` | ✅ 支持 | GPT Image 经济版 | 大批量生成 |
+| `dall-e-3` | ❌ 不支持 | DALL·E 3，仅纯文生图 | 纯文字描述场景 |
+
+**环境变量配置：**
+```bash
+export OPENAI_API_KEY="sk-..."
+export OPENAI_MODEL="gpt-image-1.5"  # 推荐：覆盖默认 dall-e-3 以启用参考图
+# export OPENAI_BASE_URL="https://your-proxy.com/v1"  # 可选代理
+```
+
+**纯文生图（无参考图）：**
 ```javascript
 const response = await fetch("https://api.openai.com/v1/images/generations", {
   method: "POST",
@@ -25,11 +47,11 @@ const response = await fetch("https://api.openai.com/v1/images/generations", {
     "Authorization": `Bearer ${apiKey}`
   },
   body: JSON.stringify({
-    model: "dall-e-3",
+    model: "dall-e-3",  // 或 gpt-image-1.5
     prompt: prompt,
-    size: "1024x1024",       // "1024x1024" | "1792x1024" | "1024x1792"
-    quality: "hd",            // "standard" | "hd"
-    response_format: "b64_json",  // 直接返回base64，避免CORS
+    size: "1024x1024",
+    quality: "hd",       // "standard" | "hd"
+    response_format: "b64_json",
     n: 1
   })
 });
@@ -37,7 +59,27 @@ const data = await response.json();
 const base64 = data.data[0].b64_json;
 ```
 
-**注意：** DALL·E 3 有内容过滤，产品照类 Prompt 通常不会触发。
+**图生图（有参考图，仅 GPT Image）：**
+```javascript
+const formData = new FormData();
+formData.append("model", "gpt-image-1.5");
+formData.append("prompt", prompt);
+formData.append("size", "1024x1024");
+formData.append("response_format", "b64_json");
+formData.append("n", "1");
+// 参考图（文件）
+formData.append("image", new Blob([imageBytes]), "product.jpg");
+
+const response = await fetch("https://api.openai.com/v1/images/edits", {
+  method: "POST",
+  headers: { "Authorization": `Bearer ${apiKey}` },
+  body: formData
+});
+const data = await response.json();
+const base64 = data.data[0].b64_json;
+```
+
+**⚠️ 重要：** 使用 `dall-e-3` 时若提供了参考图，脚本会自动降级为纯文生图并输出警告。如需保留商品外观，请设置 `OPENAI_MODEL=gpt-image-1.5` 或在调用时使用 `--model gpt-image-1.5`。
 
 ---
 

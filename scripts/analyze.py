@@ -15,6 +15,7 @@ analyze.py — 商品图视觉分析
 
 用法：
   python3 analyze.py ./product.jpg
+  python3 analyze.py ./front.jpg ./back.jpg          # 多张图（正面+背面）
   python3 analyze.py https://example.com/product.jpg
   python3 analyze.py ./product.jpg --provider tongyi
   python3 analyze.py ./product.jpg --lang en
@@ -88,10 +89,11 @@ ANALYSIS_PROMPT_ZH = """\
   "garment_position": "top | bottom | full-body | non-apparel（非服装统一填 non-apparel）",
   "visual_features": ["视觉特征1", "视觉特征2"],
   "selling_points": [
-    {"icon": "fabric|fit|design|comfort|quality|function|scene", "zh": "中文卖点标题", "en": "English title", "zh_desc": "中文说明≤15字", "en_desc": "English desc ≤12 words"}
+    {"icon": "fabric|fit|design|comfort|quality|function|scene", "zh": "中文卖点标题", "en": "English title", "zh_desc": "中文说明≤15字", "en_desc": "English desc ≤12 words", "visual_keywords": ["English keyword1", "English keyword2"]}
   ],
   "target_audience": "目标人群描述",
-  "usage_scenes": ["使用场景1", "使用场景2"],
+  "target_scenes": ["使用场景1", "使用场景2"],
+  "product_style": "商品风格（如：法式浪漫 / 日系可爱 / 简约商务 / 运动休闲）",
   "color": "精确英文色值描述（如 pure white、lavender purple）",
   "material": "主要材质（若可识别）",
   "style": "版型描述（宽松oversized、修身等）",
@@ -116,10 +118,11 @@ Examine the product image carefully and output ONLY the following JSON, no other
   "garment_position": "top | bottom | full-body | non-apparel (use non-apparel for all non-clothing products)",
   "visual_features": ["feature1", "feature2"],
   "selling_points": [
-    {"icon": "fabric|fit|design|comfort|quality|function|scene", "zh": "Chinese title", "en": "English title", "zh_desc": "Chinese desc ≤15 chars", "en_desc": "English desc ≤12 words"}
+    {"icon": "fabric|fit|design|comfort|quality|function|scene", "zh": "Chinese title", "en": "English title", "zh_desc": "Chinese desc ≤15 chars", "en_desc": "English desc ≤12 words", "visual_keywords": ["English keyword1", "English keyword2"]}
   ],
   "target_audience": "Target audience description",
-  "usage_scenes": ["scene1", "scene2"],
+  "target_scenes": ["scene1", "scene2"],
+  "product_style": "Product style (e.g. Romantic French / Casual Sporty / Minimalist Office)",
   "color": "Precise color (e.g. pure white, lavender purple)",
   "material": "Main material (if identifiable)",
   "style": "Fit description (oversized, slim-fit, etc.)",
@@ -189,35 +192,34 @@ def auto_select_provider() -> tuple[dict, str] | None:
 
 # ── 核心分析函数 ───────────────────────────────────────────────────────────────
 
-def analyze(image_path_or_url: str, provider: dict, api_key: str,
+def analyze(image_paths_or_urls: list, provider: dict, api_key: str,
             lang: str = "zh", cli_model: str = "", cli_url: str = "") -> dict:
     """
-    调用视觉 API 分析商品图片，返回结构化卖点 dict。
+    调用视觉 API 分析商品图片（支持多张），返回结构化卖点 dict。
     失败时返回 {"error": "...", "raw": "原始回复"}。
     """
     model = cli_model or os.environ.get(provider["env_model"], "") or provider["default_model"]
     base_url = cli_url or os.environ.get(provider["env_url"], "") or provider["default_url"]
 
     prompt = ANALYSIS_PROMPT_ZH if lang == "zh" else ANALYSIS_PROMPT_EN
-    image_url = image_to_url(image_path_or_url)
 
-    print(f"   正在分析商品图片（供应商: {provider['name']}  模型: {model}）...", file=sys.stderr)
+    n = len(image_paths_or_urls)
+    print(f"   正在分析商品图片 {n} 张（供应商: {provider['name']}  模型: {model}）...", file=sys.stderr)
+
+    # 构建多图 content 列表：所有图片先行，prompt 文本末尾
+    content = []
+    for path_or_url in image_paths_or_urls:
+        image_url = image_to_url(path_or_url)
+        content.append({"type": "image_url", "image_url": {"url": image_url}})
+    content.append({"type": "text", "text": prompt})
 
     client = OpenAI(api_key=api_key, base_url=base_url)
 
     try:
         completion = client.chat.completions.create(
             model=model,
-            messages=[
-                {
-                    "role": "user",
-                    "content": [
-                        {"type": "image_url", "image_url": {"url": image_url}},
-                        {"type": "text", "text": prompt},
-                    ],
-                }
-            ],
-            max_tokens=1024,
+            messages=[{"role": "user", "content": content}],
+            max_tokens=2048,
             temperature=0.1,
         )
     except Exception as e:
@@ -238,7 +240,7 @@ def analyze(image_path_or_url: str, provider: dict, api_key: str,
 
 def main():
     parser = argparse.ArgumentParser(description="商品图片视觉分析脚本")
-    parser.add_argument("image",      help="商品图片路径（本地文件）或 HTTP URL")
+    parser.add_argument("images",     nargs="+", help="商品图片路径（本地文件）或 HTTP URL，支持多张（空格分隔）")
     parser.add_argument("--provider", default="",   help="指定供应商：tongyi / doubao / openai（不填则自动降级）")
     parser.add_argument("--api-key",  default="",   help="API Key（也可通过环境变量传入）")
     parser.add_argument("--base-url", default="",   help="自定义 Base URL（也可通过 *_BASE_URL 环境变量传入）")
@@ -279,7 +281,7 @@ def main():
 
     # 执行分析
     result = analyze(
-        image_path_or_url=args.image,
+        image_paths_or_urls=args.images,
         provider=provider,
         api_key=api_key,
         lang=args.lang,

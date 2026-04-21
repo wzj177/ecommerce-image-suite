@@ -143,13 +143,14 @@ DEFAULT_URLS = {
 # ── 图片类型 → 中文文件名映射 ────────────────────────────────────────────────
 
 TYPE_NAMES_ZH = {
-    "white_bg":     "白底主图",
-    "key_features": "核心卖点图",
-    "selling_pt":   "卖点图",
-    "material":     "材质图",
-    "lifestyle":    "场景展示图",
-    "model":        "模特展示图",
-    "multi_scene":  "多场景拼图",
+    "white_bg":      "白底主图",
+    "key_features":  "核心卖点图",
+    "selling_pt":    "卖点图",
+    "material":      "材质图",
+    "lifestyle":     "场景展示图",
+    "model":         "模特展示图",
+    "multi_scene":   "多场景拼图",
+    "three_angle_view": "三角度拼图",
 }
 
 
@@ -178,17 +179,18 @@ def _sp_desc(sp, i, lang):
 
 
 def _sp_visual_detail(sp, i) -> str:
-    """获取第 i 个卖点用于放大镜特写的视觉细节描述。
-    优先取 visual_keywords[0]，其次取 description，再次取 zh 标题。"""
+    """获取第 i 个卖点用于放大镜特写的视觉细节描述（英文）。
+    优先取 visual_keywords（应为英文关键词列表），其次取 en_desc，再取 en 标题。
+    禁止回退到 zh / description（中文字段），防止中文字符混入英文 Prompt 导致 AI 误解。"""
     try:
         pt = sp[i]
     except IndexError:
         return ""
     kw = pt.get("visual_keywords", [])
     if kw:
-        # 取前两个关键词组合为描述
-        return ", ".join(kw[:2])
-    return pt.get("description", pt.get("zh", pt.get("en", "")))
+        return ", ".join(str(k) for k in kw[:2])
+    # 级联英文字段，不回退到中文
+    return pt.get("en_desc", pt.get("en", ""))
 
 
 def _infer_pairing(garment_position: str) -> str:
@@ -204,14 +206,16 @@ def _infer_pairing(garment_position: str) -> str:
     return ""
 
 
-def _scene_to_env(scene_zh: str) -> str:
-    """将中文目标场景词映射为英文环境描述，用于 lifestyle / multi_scene prompt。"""
+def _scene_to_env(scene_zh: str, product_type: str = "") -> str:
+    """将中文目标场景词映射为英文环境描述，用于 lifestyle / multi_scene prompt。
+    product_type 用于在场景词模糊时推断类别默认环境（兜底）。"""
     s = scene_zh
+    # ── 服装/通用生活场景 ──
     if any(k in s for k in ("居家", "睡", "卧室", "内衣", "睡衣", "室内", "家中", "闺蜜")):
         return "cozy bedroom interior, soft ambient lamp light, satin bedding, intimate home setting"
     if any(k in s for k in ("海边", "沙滩", "度假", "海滩", "海岛")):
         return "tropical beach, golden sand, turquoise ocean backdrop, sunlit coastal scene"
-    if any(k in s for k in ("约会", "浪漫", "晚宴", "romantc", "date", "情")):
+    if any(k in s for k in ("约会", "浪漫", "晚宴", "romantic", "date", "情侣")):
         return "intimate romantic restaurant terrace, warm candlelight, evening ambient glow"
     if any(k in s for k in ("运动", "健身", "瑜伽", "跑步", "gym", "sport")):
         return "modern fitness studio or park path, natural light, clean athletic atmosphere"
@@ -227,8 +231,90 @@ def _scene_to_env(scene_zh: str) -> str:
         return "scenic travel destination, open air, natural bright light, wanderlust vibe"
     if any(k in s for k in ("咖啡", "下午茶", "café", "coffee")):
         return "cozy café interior, wooden table, warm natural window light, lifestyle mood"
-    # 默认
+    # ── 非服装/家居/电器 场景 ──
+    if any(k in s for k in ("客厅", "沙发", "起居", "living room")):
+        return "bright modern living room, clean sofa and wooden floor, warm natural light"
+    if any(k in s for k in ("厨房", "餐厅", "烹饪", "kitchen")):
+        return "clean modern kitchen counter, marble surface, soft overhead lighting"
+    if any(k in s for k in ("书房", "书桌", "学习", "阅读", "study", "desk")):
+        return "tidy home study room, wooden desk, soft warm desk lamp, bookshelf background"
+    if any(k in s for k in ("办公桌", "工作台", "workspace")):
+        return "minimalist office desk setup, clean workspace, natural window light"
+    if any(k in s for k in ("床头", "睡前", "bedside")):
+        return "serene bedroom setting, bedside table, soft ambient lamp glow"
+    if any(k in s for k in ("清洁", "打扫", "吸尘", "拖地", "clean")):
+        return "bright clean home interior, polished floor, natural daylight, tidying scene"
+    if any(k in s for k in ("装修", "家装", "布置", "decor", "interior")):
+        return "stylish home interior during decoration, warm ambient light, modern furniture"
+    if any(k in s for k in ("庭院", "花园", "园艺", "garden", "outdoor work", "户外劳作")):
+        return "sunlit backyard garden, lush green plants, natural bright outdoor daylight"
+    # ── 类别兜底（scene 词模糊时按 product_type 给默认场景）──
+    pt = product_type.lower()
+    if any(k in pt for k in ("家居", "home", "furniture", "家具")):
+        return "bright Scandinavian-style living room, clean surfaces, warm natural light"
+    if any(k in pt for k in ("3c", "数码", "电器", "electronics", "appliance")):
+        return "clean minimalist workspace or kitchen counter, soft studio-style lighting"
+    if any(k in pt for k in ("美妆", "beauty", "cosmetic", "护肤")):
+        return "elegant vanity desk, soft diffused light, fresh white background, beauty mood"
+    if any(k in pt for k in ("食品", "food", "零食", "beverage")):
+        return "warm kitchen countertop with natural ingredients, rustic wooden surface, fresh daylight"
+    # 全局默认
     return "bright authentic lifestyle setting, natural light, shallow depth of field"
+
+
+def _get_scene_env(target_scene_envs: list, index: int,
+                   target_scenes: list, product_type: str = "") -> str:
+    """获取指定 index 的英文场景环境描述。
+    优先读取 target_scene_envs（Agent 预翻译的英文环境描述），
+    降级到 _scene_to_env() 中文关键词映射。"""
+    if target_scene_envs and index < len(target_scene_envs):
+        env = (target_scene_envs[index] or "").strip()
+        if env:
+            return env
+    if target_scenes and index < len(target_scenes):
+        return _scene_to_env(target_scenes[index], product_type)
+    return _scene_to_env("", product_type)
+
+
+def _infer_model_subject(target_audience: str, model_ethnicity: str = "") -> str:
+    """根据 target_audience 和 model_ethnicity 推断模特性别/年龄/种族描述。
+
+    Args:
+        target_audience: 目标人群描述（如"18-30岁年轻女性"）
+        model_ethnicity: 模特种族偏好（asian/western/mixed，默认为asian）
+
+    Returns:
+        模特描述字符串
+    """
+    s = target_audience.lower() if target_audience else ""
+
+    # 判断性别
+    if any(k in s for k in ("男", "男士", "男性", "先生", "men", "male", "gentleman", "boy")):
+        gender = "male"
+    else:
+        gender = "female"
+
+    # 判断年龄
+    if any(k in s for k in ("儿童", "小孩", "宝宝", "孩子", "children", "child", "kids",
+                            "6岁", "8岁", "10岁", "12岁")):
+        age_desc = "child model aged 6-12"
+    else:
+        age_desc = "adult model"
+
+    # 判断种族
+    ethnicity = model_ethnicity.lower() if model_ethnicity else "asian"
+    if ethnicity == "western":
+        race = "Caucasian"
+    elif ethnicity == "mixed":
+        race = "ethnically diverse"
+    else:  # asian 或默认
+        race = "Asian"
+
+    # 组合描述
+    if age_desc == "child model aged 6-12":
+        return f"{race} {age_desc}"
+    else:
+        return f"{race} {gender} model"
 
 
 # ── 输入图类型 → 白底主图构图描述 ──────────────────────────────────────────────
@@ -265,13 +351,14 @@ INPUT_TYPE_COMPOSITIONS = {
 # 每种图类型优先选用哪张输入图（按 index）
 # front=0, back=1；当 back 图不存在时自动回退到 front
 TYPE_IMAGE_SLOT = {
-    "white_bg":     0,   # 正面
-    "key_features": 0,   # 正面
-    "selling_pt":   0,   # 正面
-    "material":     1,   # 背面/细节面（纹理更清晰）
-    "lifestyle":    0,
-    "model":        0,
-    "multi_scene":  0,
+    "white_bg":      0,   # 正面
+    "key_features":  0,   # 正面
+    "selling_pt":    0,   # 正面
+    "material":      1,   # 背面/细节面（纹理更清晰）
+    "lifestyle":     0,
+    "model":         0,
+    "multi_scene":   0,
+    "three_angle_view": 0,  # 使用正面图，AI生成三角度
 }
 
 
@@ -281,11 +368,21 @@ def build_prompt(type_id: str, desc: str, selling_points: list,
                  print_design_lock: str = "", has_product_ref: bool = False,
                  input_image_type: str = "flat_lay",
                  template_set: int = 1,
+                 key_features_style: str = "",
+                 per_type_templates: dict = None,
                  target_scenes: list = None,
-                 product_style: str = "") -> str:
+                 product_style: str = "",
+                 target_audience: str = "",
+                 target_scene_envs: list = None,
+                 product_type: str = "",
+                 model_ethnicity: str = "asian") -> str:
     """构建图片 Prompt。template_set 1-5 对应 5 套视觉风格模板。
-    target_scenes: 来自商品分析的目标场景列表，如 ['居家休闲', '睡前护肤', '约会出行']
-    product_style: 商品风格/子类型，如 '居家睡衣' / '运动休闲'，用于场景推断
+    target_scenes:     来自商品分析的目标场景列表（中文），如 ['居家休闲', '约会出行']
+    target_scene_envs: Agent 预翻译的英文场景环境列表，与 target_scenes 一一对应
+    product_style:     商品风格标签，如 '居家睡衣' / '运动休闲'，用于 lifestyle 标题
+    target_audience:   目标用户描述，用于推断模特性别/年龄
+    product_type:      商品大类，如 '服装' / '家居' / '3C数码'，用于场景兜底推断
+    model_ethnicity:   模特种族，asian/western/mixed，默认为 asian
     """
 
     QUALITY = (
@@ -298,32 +395,54 @@ def build_prompt(type_id: str, desc: str, selling_points: list,
     )
 
     PRODUCT_REF_LOCK = (
-        "CRITICAL: Product reference image is provided. Keep EXACT same product silhouette, print pattern, "
-        "print position, colors, neckline, sleeves, hem and material appearance. "
-        "Only change scene/camera/lighting/model pose; do not change product itself."
+        "CRITICAL HIGHEST PRIORITY: Product reference image is provided. "
+        "You MUST use the reference image as the EXACT basis for the product. "
+        "Keep EXACT same: silhouette, print pattern, print position, all colors, neckline, sleeves, hem, fabric texture. "
+        "DO NOT change: the print design, color scheme, silhouette shape, fabric appearance. "
+        "You may ONLY change: background scene, camera angle, lighting, model pose. "
+        "The product must look IDENTICAL to the reference image - same dress, same pattern, same colors."
     )
 
-    TEXT_RENDER = (
-        "EXTREMELY IMPORTANT: Render all text directly into the image using clean modern bold sans-serif typography "
-        "(思源黑体 / Alibaba PuHuiTi or Helvetica Neue). Text must be perfectly sharp, highly legible, "
-        "excellent hierarchy, proper kerning. Use subtle drop shadow (black 30% opacity) for readability. "
-        "Professional commercial layout, balanced spacing, no distortion, no overlapping."
-    )
+    # 语言约束：Gemini/OpenAI 需要明确指定文本语言
+    if lang == "zh":
+        TEXT_RENDER = (
+            "EXTREMELY IMPORTANT: Render ALL text in Simplified Chinese ONLY. "
+            "Use clean modern bold sans-serif typography (思源黑体 / Alibaba PuHuiTi or similar). "
+            "Text must be perfectly sharp, highly legible, excellent hierarchy, proper kerning. "
+            "Use subtle drop shadow (black 30% opacity) for readability. "
+            "Professional commercial layout, balanced spacing, no distortion, no overlapping."
+        )
+    else:  # lang == "en"
+        TEXT_RENDER = (
+            "EXTREMELY IMPORTANT: Render ALL text in English ONLY. "
+            "Use clean modern bold sans-serif typography (Helvetica Neue, Arial, or similar). "
+            "Text must be perfectly sharp, highly legible, excellent hierarchy, proper kerning. "
+            "Use subtle drop shadow (black 30% opacity) for readability. "
+            "Professional commercial layout, balanced spacing, no distortion, no overlapping."
+        )
+
+    target_scenes = target_scenes or []
+    target_scene_envs = target_scene_envs or []
+
+    # 根据 target_audience 和 model_ethnicity 推断模特描述
+    _model_subject = _infer_model_subject(target_audience, model_ethnicity)
 
     sp = selling_points
     kf_heading = "为什么选择我们" if lang == "zh" else "WHY CHOOSE US"
     kf_labels = [_sp_title(sp, i, lang) for i in range(3)]
 
-    sp_heading = _sp_title(sp, 1, lang) or ("宽松版型设计" if lang == "zh" else "LOOSE FIT DESIGN")
-    sp_sub1 = _sp_desc(sp, 1, lang) or ("活动自如无束缚" if lang == "zh" else "Unrestricted Movement")
-    sp_sub2 = _sp_desc(sp, 2, lang) or ("显瘦舒适两不误" if lang == "zh" else "Comfortable and Flattering")
+    # 卖点图文案：纯级联，不硬编码品类专属兜底文字
+    sp_heading = _sp_title(sp, 1, lang) or _sp_title(sp, 0, lang)
+    sp_sub1 = _sp_desc(sp, 1, lang) or _sp_desc(sp, 0, lang)
+    sp_sub2 = _sp_desc(sp, 2, lang) or _sp_desc(sp, 1, lang)
 
-    mat_heading = _sp_title(sp, 0, lang) or ("优质精梳棉" if lang == "zh" else "PREMIUM COMBED COTTON")
-    mat_sub1 = _sp_desc(sp, 0, lang) or ("亲肤柔软不刺激" if lang == "zh" else "Soft and Skin-friendly")
-    mat_sub2 = _sp_desc(sp, 2, lang) or ("干爽透气，全天舒适" if lang == "zh" else "Keep Dry and Breathable")
+    # 材质图文案：纯级联
+    mat_heading = _sp_title(sp, 0, lang)
+    mat_sub1 = _sp_desc(sp, 0, lang)
+    mat_sub2 = _sp_desc(sp, 2, lang) or _sp_desc(sp, 1, lang)
 
     # 场景展示图文案：从目标场景 + 卖点动态生成，禁止写死品类专属文案
-    _ts = [s for s in (target_scenes or []) if s]
+    _ts = [s for s in target_scenes if s]
     ls_heading = (
         (product_style[:20] if product_style else None)
         or _sp_title(sp, 2, lang)
@@ -342,9 +461,14 @@ def build_prompt(type_id: str, desc: str, selling_points: list,
     )
 
     MODEL_REF_LOCK = (
-        "CRITICAL: Reference image of the model is provided. MUST use EXACTLY the same "
-        "Chinese/East Asian female model: identical face, skin tone, hair, body shape, "
-        "expression and ethnicity. Do not replace or change her."
+        f"CRITICAL: Two reference images are provided. "
+        f"First image: Model reference — MUST use EXACTLY the same "
+        f"{_model_subject}: identical face, skin tone, hair, body shape, "
+        f"expression and ethnicity. Do not replace or change the model. "
+        f"Second image: Product reference — MUST use EXACTLY the same "
+        f"garment design: silhouette, print pattern, print position, all colors, neckline, sleeves, hem, fabric texture. "
+        f"The model must WEAR the EXACT SAME garment from the second image. "
+        f"Do NOT change the garment design, color, or style."
     )
 
     # 根据分析结果中的 garment_position 决定搭配
@@ -377,12 +501,44 @@ def build_prompt(type_id: str, desc: str, selling_points: list,
         else "surface detail"
     )
 
-    # ── 核心卖点图 5 套模板 ──────────────────────────────────────────────────
+    # ── 核心卖点图样式（独立于 template_set）─────────────────────────────────────
+    # 优先级：key_features_style > per_type_templates > 默认
     kf_detail_a = _sp_visual_detail(sp, 0) or "fabric texture and stitching"
     kf_detail_b = _sp_visual_detail(sp, 1) or "design detail and craftsmanship"
     kf_detail_c = _sp_visual_detail(sp, 2) or "silhouette and fit"
 
-    if template_set == 2:    # 生活杂志：手写标注线
+    per_type_templates = per_type_templates or {}
+
+    # 确定核心卖点图样式
+    if key_features_style:
+        kf_style = key_features_style
+    elif "key_features" in per_type_templates:
+        # 从 per_type_templates 转换模板编号到样式
+        kf_tpl = per_type_templates["key_features"]
+        if kf_tpl == 2:
+            kf_style = "annotation"
+        elif kf_tpl == 3:
+            kf_style = "split"
+        elif kf_tpl == 4:
+            kf_style = "badge"
+        elif kf_tpl == 5:
+            kf_style = "gold_bubble"
+        else:
+            kf_style = "magnifier" if is_apparel else "icon_list"
+    else:
+        # 默认：服装用放大镜，非服装用图标列表
+        kf_style = "magnifier" if is_apparel else "icon_list"
+
+    # 根据确定的样式构建 prompt
+    if kf_style == "icon_list":  # 信息图标列表
+        key_features_prompt = (
+            f"Modern minimalist infographic, light gray gradient bg. "
+            f"Left: {desc} front view (45%). "
+            f"Right: bold heading \"{kf_heading}\", "
+            f"three vertical icon+text: \"{kf_labels[0]}\", \"{kf_labels[1]}\", \"{kf_labels[2]}\". "
+            f"Premium layout. {TEXT_RENDER}{ref_tail} {QUALITY}"
+        )
+    elif kf_style == "annotation":  # 标注线指示
         key_features_prompt = (
             f"{desc}, editorial product photography, product centered on warm beige background. "
             f"Three elegant handwritten-style annotation lines from product details: "
@@ -392,7 +548,7 @@ def build_prompt(type_id: str, desc: str, selling_points: list,
             f"Kinfolk magazine aesthetic, natural light and shadows, serif typeface. "
             f"{TEXT_RENDER}{ref_tail} {QUALITY}"
         )
-    elif template_set == 3:  # 极简高冷：黑底白字线框
+    elif kf_style == "split":  # 分割板块
         key_features_prompt = (
             f"{desc}, ultra-minimalist product photography on pure black background. "
             f"Product in white spotlight center, single white hairline border frame. "
@@ -401,7 +557,7 @@ def build_prompt(type_id: str, desc: str, selling_points: list,
             f"Luxury fashion brand, zero clutter, monochrome palette. "
             f"{TEXT_RENDER}{ref_tail} {QUALITY}"
         )
-    elif template_set == 4:  # 活力爆款：爆炸形背景粗体红字
+    elif kf_style == "badge":  # 爆炸形徽章（活力爆款）
         key_features_prompt = (
             f"{desc}, high-energy commercial product photography, white background. "
             f"Bold sunburst starburst in yellow (#FFD700) behind product. "
@@ -410,7 +566,7 @@ def build_prompt(type_id: str, desc: str, selling_points: list,
             f"Explosive high-saturation POP art energy. "
             f"{TEXT_RENDER}{ref_tail} {QUALITY}"
         )
-    elif template_set == 5:  # 暗调质感：深灰底金色描边气泡
+    elif kf_style == "gold_bubble":  # 金色描边气泡（暗调质感）
         key_features_prompt = (
             f"{desc}, luxury dark product photography on deep charcoal (#1A1A2E) background. "
             f"Product lit with golden side light. "
@@ -419,25 +575,17 @@ def build_prompt(type_id: str, desc: str, selling_points: list,
             f"Premium fashion editorial dark aesthetic, gold accent (#C8A86C). "
             f"{TEXT_RENDER}{ref_tail} {QUALITY}"
         )
-    elif is_apparel:         # 默认：放大镜气泡（服装）
+    else:  # magnifier - 放大镜气泡（默认）
         key_features_prompt = (
             f"{desc}, high-end product photography, centered floating composition, "
             f"clean softly blurred background; "
             f"featuring 3 circular magnifying glass insets (callout bubbles) connected by thin elegant lines "
             f"to specific parts of the main product: "
-            f"Inset 1 (top-left): close-up of [{kf_detail_a}]; "
-            f"Inset 2 (top-right): close-up of [{kf_detail_b}]; "
-            f"Inset 3 (bottom-right): close-up of [{kf_detail_c}]. "
-            f"Soft studio lighting, minimalist commercial design, ample negative space for text overlay, "
-            f"sharp focus on product, bokeh background, no text, no watermark.{ref_tail} {QUALITY}"
-        )
-    else:                    # 默认：信息图标（非服装）
-        key_features_prompt = (
-            f"Modern minimalist infographic, light gray gradient bg. "
-            f"Left: {desc} front view (45%). "
-            f"Right: bold heading \"{kf_heading}\", "
-            f"three vertical icon+text: \"{kf_labels[0]}\", \"{kf_labels[1]}\", \"{kf_labels[2]}\". "
-            f"Premium layout. {TEXT_RENDER}{ref_tail} {QUALITY}"
+            f"Inset 1 (top-left): close-up of [{kf_detail_a}], label \"{kf_labels[0]}\"; "
+            f"Inset 2 (top-right): close-up of [{kf_detail_b}], label \"{kf_labels[1]}\"; "
+            f"Inset 3 (bottom-right): close-up of [{kf_detail_c}], label \"{kf_labels[2]}\". "
+            f"Soft studio lighting, minimalist commercial design, sharp focus on product, bokeh background. "
+            f"{TEXT_RENDER}{ref_tail} {QUALITY}"
         )
 
     # ── 卖点图 5 套模板 ──────────────────────────────────────────────────────
@@ -446,85 +594,154 @@ def build_prompt(type_id: str, desc: str, selling_points: list,
     _MODEL_REALISM = " natural hair flyaway, subtle hand movement, authentic candid posture."
     if template_set == 2:    # 生活杂志：咖啡馆窗前
         selling_pt_prompt = (
-            f"Bright café window seat, morning natural light, warm wooden surface. "
-            f"{desc} casually arranged. Bold heading \"{sp_heading}\" upper left, "
-            f"\"{sp_sub1}\", \"{sp_sub2}\". Kinfolk lifestyle mood. "
-            f"{TEXT_RENDER}{ref_tail} {QUALITY}"
+            (
+                f"Bright café window seat, morning natural light, warm wooden surface. "
+                f"{desc} casually arranged in lifestyle context. Bold heading \"{sp_heading}\" upper left, "
+                f"\"{sp_sub1}\", \"{sp_sub2}\". Kinfolk lifestyle mood. "
+                f"{TEXT_RENDER}{ref_tail} {QUALITY}"
+            ) if is_apparel else (
+                f"Bright café window seat, morning natural light, warm wooden surface. "
+                f"{desc} placed as a lifestyle product hero. Bold heading \"{sp_heading}\" upper left, "
+                f"\"{sp_sub1}\", \"{sp_sub2}\". Kinfolk product mood. "
+                f"{TEXT_RENDER}{ref_tail} {QUALITY}"
+            )
         )
     elif template_set == 3:  # 极简高冷：纯白棚拍
         selling_pt_prompt = (
-            f"Pure white minimal studio, crisp shadows. {desc} centered on white surface. "
-            f"Single bold heading \"{sp_heading}\" top, \"{sp_sub1}\", \"{sp_sub2}\" below. "
-            f"No props, zero clutter. {TEXT_RENDER}{ref_tail} {QUALITY}"
+            (
+                f"Pure white minimal studio, crisp shadows. {desc} centered on white surface. "
+                f"Single bold heading \"{sp_heading}\" top, \"{sp_sub1}\", \"{sp_sub2}\" below. "
+                f"No props, zero clutter. {TEXT_RENDER}{ref_tail} {QUALITY}"
+            ) if is_apparel else (
+                f"Pure white minimal studio, crisp directional shadows. {desc} centered on white surface, "
+                f"product as hero object. Single bold heading \"{sp_heading}\" top, "
+                f"\"{sp_sub1}\", \"{sp_sub2}\" below. No props, zero clutter. "
+                f"{TEXT_RENDER}{ref_tail} {QUALITY}"
+            )
         )
     elif template_set == 4:  # 活力爆款：户外街头高饱和
         selling_pt_prompt = (
-            f"Vibrant outdoor urban street, high saturation colors, dynamic energy. "
-            f"{desc} featured prominently. Bold heading \"{sp_heading}\", "
-            f"\"{sp_sub1}\", \"{sp_sub2}\". "
-            f"Pop art energy. {TEXT_RENDER}{ref_tail} {QUALITY}"
+            (
+                f"Vibrant outdoor urban street, high saturation colors, dynamic energy. "
+                f"{desc} featured prominently. Bold heading \"{sp_heading}\", "
+                f"\"{sp_sub1}\", \"{sp_sub2}\". Pop art energy. {TEXT_RENDER}{ref_tail} {QUALITY}"
+            ) if is_apparel else (
+                f"Vibrant high-energy commercial setting, high saturation colors. "
+                f"{desc} showcased boldly as hero product. Bold heading \"{sp_heading}\", "
+                f"\"{sp_sub1}\", \"{sp_sub2}\". Pop art energy. {TEXT_RENDER}{ref_tail} {QUALITY}"
+            )
         )
     elif template_set == 5:  # 暗调质感：暗棚聚光灯
         selling_pt_prompt = (
-            f"Dark atmospheric studio, single beam spotlight illuminating {desc}. "
-            f"Deep moody shadows, cinematic feel. "
-            f"Bold gold heading \"{sp_heading}\", \"{sp_sub1}\", \"{sp_sub2}\" in white. "
-            f"{TEXT_RENDER}{ref_tail} {QUALITY}"
+            (
+                f"Dark atmospheric studio, single beam spotlight illuminating {desc}. "
+                f"Deep moody shadows, cinematic feel. "
+                f"Bold gold heading \"{sp_heading}\", \"{sp_sub1}\", \"{sp_sub2}\" in white. "
+                f"{TEXT_RENDER}{ref_tail} {QUALITY}"
+            ) if is_apparel else (
+                f"Dark atmospheric studio, single beam spotlight illuminating {desc} product. "
+                f"Product surface details highlighted, deep cinematic shadows. "
+                f"Bold gold heading \"{sp_heading}\", \"{sp_sub1}\", \"{sp_sub2}\" in white. "
+                f"{TEXT_RENDER}{ref_tail} {QUALITY}"
+            )
         )
-    else:                    # 默认：卧室暖光
+    else:                    # 默认：动态场景+卖点文案
+        _sp_env = _get_scene_env(target_scene_envs, 0, target_scenes, product_type)
         selling_pt_prompt = (
-            f"Cozy bedroom, warm soft light. {desc} laid flat or worn relaxed fit. "
-            f"Bold heading \"{sp_heading}\" upper left, two lines: \"{sp_sub1}\", \"{sp_sub2}\". "
-            f"Luxury casual mood. {TEXT_RENDER}{ref_tail} {QUALITY}"
+            (
+                f"{_sp_env.capitalize()}, warm natural light. {desc} worn with relaxed natural pose. "
+                f"Bold heading \"{sp_heading}\" upper left, two lines: \"{sp_sub1}\", \"{sp_sub2}\". "
+                f"Commercial lifestyle mood. {TEXT_RENDER}{ref_tail} {QUALITY}"
+            ) if is_apparel else (
+                f"{_sp_env.capitalize()}, clean natural light. {desc} displayed prominently as hero product. "
+                f"Bold heading \"{sp_heading}\" upper left, two lines: \"{sp_sub1}\", \"{sp_sub2}\". "
+                f"Commercial product mood. {TEXT_RENDER}{ref_tail} {QUALITY}"
+            )
         )
 
     # ── 材质图 5 套模板 ──────────────────────────────────────────────────────
-    if template_set == 2:    # 生活杂志：木纹/大理石桌面铺陈
+    if template_set == 2:    # 生活杂志：木纹/大理石桌面
         material_prompt = (
-            f"{desc} laid flat on natural oak wood or white marble surface, "
-            f"editorial flat lay, top-down bird's eye view, warm morning light. "
-            f"Bold heading \"{mat_heading}\" upper right, \"{mat_sub1}\" mid, \"{mat_sub2}\" lower. "
-            f"{TEXT_RENDER}{ref_tail} {QUALITY}"
+            (
+                f"{desc} laid flat on natural oak wood or white marble surface, "
+                f"editorial flat lay, top-down bird's eye view, warm morning light. "
+                f"Bold heading \"{mat_heading}\" upper right, \"{mat_sub1}\" mid, \"{mat_sub2}\" lower. "
+                f"{TEXT_RENDER}{ref_tail} {QUALITY}"
+            ) if is_apparel else (
+                f"{desc} placed on natural oak wood or white marble surface, "
+                f"editorial top-down product shot, warm morning light, clean composition. "
+                f"Bold heading \"{mat_heading}\" upper right, \"{mat_sub1}\" mid, \"{mat_sub2}\" lower. "
+                f"{TEXT_RENDER}{ref_tail} {QUALITY}"
+            )
         )
-    elif template_set == 3:  # 极简高冷：折叠几何极简
+    elif template_set == 3:  # 极简高冷：折叠/几何极简
         material_prompt = (
-            f"{desc} neatly folded in geometric layers on pure white surface, "
-            f"crisp shadows emphasizing fold lines and fabric weight. "
-            f"Single bold heading \"{mat_heading}\" right, \"{mat_sub1}\", \"{mat_sub2}\". "
-            f"Architectural minimal aesthetic. {TEXT_RENDER}{ref_tail} {QUALITY}"
+            (
+                f"{desc} neatly folded in geometric layers on pure white surface, "
+                f"crisp shadows emphasizing fold lines and fabric weight. "
+                f"Single bold heading \"{mat_heading}\" right, \"{mat_sub1}\", \"{mat_sub2}\". "
+                f"Architectural minimal aesthetic. {TEXT_RENDER}{ref_tail} {QUALITY}"
+            ) if is_apparel else (
+                f"{desc} precisely arranged on pure white surface, "
+                f"crisp directional shadows emphasizing product geometry and construction. "
+                f"Single bold heading \"{mat_heading}\" right, \"{mat_sub1}\", \"{mat_sub2}\". "
+                f"Architectural minimal aesthetic. {TEXT_RENDER}{ref_tail} {QUALITY}"
+            )
         )
-    elif template_set == 4:  # 活力爆款：高饱和对折叠叠
+    elif template_set == 4:  # 活力爆款：高饱和动态
         material_prompt = (
-            f"{desc} dramatically unfolded showing vivid fabric layers at dynamic angle, "
-            f"high saturation colors, close-up angled shot. "
-            f"Bold heading \"{mat_heading}\" corner, \"{mat_sub1}\", \"{mat_sub2}\" in red. "
-            f"{TEXT_RENDER}{ref_tail} {QUALITY}"
+            (
+                f"{desc} dramatically unfolded showing vivid fabric layers at dynamic angle, "
+                f"high saturation colors, close-up angled shot. "
+                f"Bold heading \"{mat_heading}\" corner, \"{mat_sub1}\", \"{mat_sub2}\" in red. "
+                f"{TEXT_RENDER}{ref_tail} {QUALITY}"
+            ) if is_apparel else (
+                f"{desc} showcased at a dynamic dramatic angle, bold close-up highlighting surface quality, "
+                f"high saturation colors, energetic composition. "
+                f"Bold heading \"{mat_heading}\" corner, \"{mat_sub1}\", \"{mat_sub2}\" in red. "
+                f"{TEXT_RENDER}{ref_tail} {QUALITY}"
+            )
         )
     elif template_set == 5:  # 暗调质感：暗色背景金边光圈
         material_prompt = (
-            f"Extreme close-up of {desc} fabric ({material_view}) against deep black background, "
-            f"golden rim lighting tracing fabric edge, dramatic contrast. "
-            f"Bold gold heading \"{mat_heading}\" right, \"{mat_sub1}\", \"{mat_sub2}\" in white. "
-            f"{TEXT_RENDER}{ref_tail} {QUALITY}"
+            (
+                f"Extreme close-up of {desc} fabric ({material_view}) against deep black background, "
+                f"golden rim lighting tracing fabric edge, dramatic contrast. "
+                f"Bold gold heading \"{mat_heading}\" right, \"{mat_sub1}\", \"{mat_sub2}\" in white. "
+                f"{TEXT_RENDER}{ref_tail} {QUALITY}"
+            ) if is_apparel else (
+                f"Extreme close-up of {desc} surface finish and construction details against deep black background, "
+                f"golden rim lighting tracing product edges, dramatic contrast. "
+                f"Bold gold heading \"{mat_heading}\" right, \"{mat_sub1}\", \"{mat_sub2}\" in white. "
+                f"{TEXT_RENDER}{ref_tail} {QUALITY}"
+            )
         )
     else:                    # 默认：极macro特写
         material_prompt = (
-            f"Extreme macro fabric texture of {desc} ({material_view}), "
-            f"dramatic side lighting, soft folds. Blurred natural background. "
-            f"Bold heading \"{mat_heading}\" upper right, \"{mat_sub1}\" mid, \"{mat_sub2}\" lower. "
-            f"Hyper detailed. {TEXT_RENDER}{ref_tail} {QUALITY}"
+            (
+                f"Extreme macro fabric texture of {desc} ({material_view}), "
+                f"dramatic side lighting, soft folds. Blurred natural background. "
+                f"Bold heading \"{mat_heading}\" upper right, \"{mat_sub1}\" mid, \"{mat_sub2}\" lower. "
+                f"Hyper detailed. {TEXT_RENDER}{ref_tail} {QUALITY}"
+            ) if is_apparel else (
+                f"Extreme close-up product detail shot of {desc}, "
+                f"showcasing surface finish, construction quality and material texture. "
+                f"Dramatic side lighting on {material_view}, clean neutral background. "
+                f"Bold heading \"{mat_heading}\" upper right, \"{mat_sub1}\" mid, \"{mat_sub2}\" lower. "
+                f"Hyper detailed product photography. {TEXT_RENDER}{ref_tail} {QUALITY}"
+            )
         )
 
     # ── 场景展示图 5 套模板 ──────────────────────────────────────────────────
-    # 根据目标场景动态推断主场景环境，而非写死固定场景
-    _ls_primary_env = _scene_to_env(_ts[0]) if _ts else _scene_to_env(product_style)
-    _ls_secondary_env = _scene_to_env(_ts[1]) if len(_ts) > 1 else _ls_primary_env
+    # 优先使用 target_scene_envs（Agent 预翻译），降级到 _scene_to_env() 关键词映射
+    _ls_primary_env = _get_scene_env(target_scene_envs, 0, target_scenes, product_type)
+    _ls_secondary_env = _get_scene_env(target_scene_envs, 1, target_scenes, product_type)
 
     if template_set == 2:    # 生活杂志：自然光氛围感
         lifestyle_prompt = (
             (
                 f"{_ls_primary_env.capitalize()}, natural golden light, soft bokeh. "
-                f"Chinese female model {outfit}, relaxed natural pose, the {desc} is the visual focus. "
+                f"{_model_subject} {outfit}, relaxed natural pose, the {desc} is the visual focus. "
                 f"Bold heading \"{ls_heading}\" upper left, \"{ls_sub1}\" and \"{ls_sub2}\". "
                 f"Magazine editorial warmth. {TEXT_RENDER} {QUALITY}{lock_tail}{ref_tail}{_sp_model_lock}"
             ) if is_apparel else (
@@ -538,7 +755,7 @@ def build_prompt(type_id: str, desc: str, selling_points: list,
         lifestyle_prompt = (
             (
                 f"Clean minimal interior space, soft diffused natural light, architectural simplicity. "
-                f"Chinese female model {outfit}, simple elegant pose, the {desc} is the visual focus. "
+                f"{_model_subject} {outfit}, simple elegant pose, the {desc} is the visual focus. "
                 f"Bold heading \"{ls_heading}\" upper left, \"{ls_sub1}\" and \"{ls_sub2}\". "
                 f"Minimal luxury feel. {TEXT_RENDER} {QUALITY}{lock_tail}{ref_tail}{_sp_model_lock}"
             ) if is_apparel else (
@@ -552,7 +769,7 @@ def build_prompt(type_id: str, desc: str, selling_points: list,
         lifestyle_prompt = (
             (
                 f"Vibrant dynamic scene with saturated colors, energetic atmosphere. "
-                f"Chinese female model {outfit}, energetic pose, the {desc} pops with color. "
+                f"{_model_subject} {outfit}, energetic pose, the {desc} pops with color. "
                 f"Bold heading \"{ls_heading}\" upper left, \"{ls_sub1}\" and \"{ls_sub2}\". "
                 f"Street fashion energy. {TEXT_RENDER} {QUALITY}{lock_tail}{ref_tail}{_sp_model_lock}"
             ) if is_apparel else (
@@ -566,7 +783,7 @@ def build_prompt(type_id: str, desc: str, selling_points: list,
         lifestyle_prompt = (
             (
                 f"Moody atmospheric scene, dramatic low-key lighting, deep shadows. "
-                f"Chinese female model {outfit}, cool editorial pose, the {desc} is the visual focus. "
+                f"{_model_subject} {outfit}, cool editorial pose, the {desc} is the visual focus. "
                 f"Bold heading \"{ls_heading}\" upper left in gold, \"{ls_sub1}\" and \"{ls_sub2}\" in white. "
                 f"Night fashion mood. {TEXT_RENDER} {QUALITY}{lock_tail}{ref_tail}{_sp_model_lock}"
             ) if is_apparel else (
@@ -580,7 +797,7 @@ def build_prompt(type_id: str, desc: str, selling_points: list,
         lifestyle_prompt = (
             (
                 f"{_ls_primary_env.capitalize()}, warm natural light, shallow DOF. "
-                f"Chinese female model {outfit}, the {desc} is the absolute visual focus. "
+                f"{_model_subject} {outfit}, the {desc} is the absolute visual focus. "
                 f"Bold white heading \"{ls_heading}\" upper left with shadow, \"{ls_sub1}\" and \"{ls_sub2}\" lower left. "
                 f"{TEXT_RENDER} {QUALITY}{lock_tail}{ref_tail}{_sp_model_lock}"
             ) if is_apparel else (
@@ -592,66 +809,70 @@ def build_prompt(type_id: str, desc: str, selling_points: list,
         )
 
     # ── 模特展示图 5 套模板 ──────────────────────────────────────────────────
+    # 简化prompt避免触发内容审查，专注于商品展示而非模特描述
     if model_style == "bodycon":  # bodycon 优先级高于 template_set
         model_prompt = (
-            f"Full-body studio fashion shot, seamless bg. Young attractive Chinese female model {outfit}. "
-            f"Fabric clings to every curve. Sensual classy, professional lighting. No text.{ref_tail} {QUALITY}"
+            f"Full-body studio fashion shot, clean solid background. {_model_subject} wearing {outfit}. "
+            f"Fitted silhouette showing garment shape. Professional commercial lighting. No text.{ref_tail} {QUALITY}"
             + _MODEL_REALISM + _sp_model_lock
         )
     elif template_set == 2:  # 生活杂志：坐姿咖啡厅休闲
         model_prompt = (
-            f"Cozy café interior, wooden chair, coffee on table. "
-            f"Chinese female model sitting casually {outfit}, warm natural light. "
-            f"The {desc} is the absolute visual focus. Relaxed editorial mood. No text.{ref_tail} {QUALITY}"
+            f"Bright café interior with window. {_model_subject} sitting {outfit}. "
+            f"Warm natural light, casual pose. The {desc} is clearly visible. No text.{ref_tail} {QUALITY}"
             + _MODEL_REALISM + _sp_model_lock
         )
     elif template_set == 3:  # 极简高冷：白底棚拍全身
         model_prompt = (
-            f"Clean white seamless studio backdrop, even flat lighting. "
-            f"Chinese female model full body standing pose {outfit}. "
-            f"The {desc} is the absolute visual focus. Minimalist commercial. No text.{ref_tail} {QUALITY}"
+            f"Clean white seamless studio background. {_model_subject} full body standing {outfit}. "
+            f"Even professional lighting. The {desc} is the focus. Minimalist commercial style. No text.{ref_tail} {QUALITY}"
             + _MODEL_REALISM + _sp_model_lock
         )
     elif template_set == 4:  # 活力爆款：街拍动态跳跃
         model_prompt = (
-            f"Vibrant urban street, dynamic movement, motion blur background. "
-            f"Chinese female model mid-stride energetic pose {outfit}. "
-            f"The {desc} is the absolute visual focus. High-energy street style. No text.{ref_tail} {QUALITY}"
+            f"Modern city street scene. {_model_subject} walking {outfit}. "
+            f"Dynamic outdoor setting with natural lighting. The {desc} is clearly visible. No text.{ref_tail} {QUALITY}"
             + _MODEL_REALISM + _sp_model_lock
         )
     elif template_set == 5:  # 暗调质感：暗棚聚光灯
         model_prompt = (
-            f"Dramatic dark studio, single key light from above-front, deep background shadows. "
-            f"Chinese female model strong editorial pose {outfit}. "
-            f"The {desc} is the absolute visual focus. Cinematic fashion. No text.{ref_tail} {QUALITY}"
+            f"Professional dark studio with focused lighting. {_model_subject} standing {outfit}. "
+            f"Single light source, clean dark background. The {desc} is clearly visible. No text.{ref_tail} {QUALITY}"
             + _MODEL_REALISM + _sp_model_lock
         )
-    else:                    # 默认：户外阳光走路
+    elif template_set == 6:  # 非对称布局：左侧大图+右侧细节
         model_prompt = (
-            f"Bright outdoor park, golden sunlight. Confident Chinese female model walking smiling, {outfit}. "
-            f"The {desc} is the absolute visual focus. Energetic mood. No text.{ref_tail} {QUALITY}"
+            f"Clean white studio background. {_model_subject} full body wearing {outfit}. "
+            f"Professional commercial lighting. The {desc} is clearly visible. No text.{ref_tail} {QUALITY}"
+            + _MODEL_REALISM + _sp_model_lock
+        )
+    else:                    # 默认：动态场景户外/室内
+        _model_env = _get_scene_env(target_scene_envs, 0, target_scenes, product_type)
+        model_prompt = (
+            f"{_model_env.capitalize()}. {_model_subject} wearing {outfit}. "
+            f"The {desc} is clearly visible. Natural professional lighting. No text.{ref_tail} {QUALITY}"
             + _MODEL_REALISM + _sp_model_lock
         )
 
     # ── 多场景拼图 5 套模板 ──────────────────────────────────────────────────
-    # 根据目标场景动态构建 3 个场景环境，而非写死固定地点
-    _ms_scene1 = _scene_to_env(_ts[0]) if len(_ts) > 0 else _scene_to_env(product_style or "居家")
-    _ms_scene2 = _scene_to_env(_ts[1]) if len(_ts) > 1 else _scene_to_env("")
-    _ms_scene3 = _scene_to_env(_ts[2]) if len(_ts) > 2 else _ls_secondary_env
+    # 优先使用 target_scene_envs，降级到 _scene_to_env() 映射
+    _ms_scene1 = _get_scene_env(target_scene_envs, 0, target_scenes, product_type)
+    _ms_scene2 = _get_scene_env(target_scene_envs, 1, target_scenes, product_type)
+    _ms_scene3 = _get_scene_env(target_scene_envs, 2, target_scenes, product_type)
     _ms_s1_label = _ts[0][:12] if len(_ts) > 0 else ms_left
     _ms_s2_label = _ts[1][:12] if len(_ts) > 1 else ms_right
     _ms_s3_label = _ts[2][:12] if len(_ts) > 2 else ""
     _ms_consistency = (
         f"CRITICAL: ALL panels show the EXACT SAME {desc} — "
         f"identical design, color, fabric texture, proportions. "
-        f"Same consistent East Asian female model throughout, full-body visible in each panel."
+        f"Same consistent {_model_subject} throughout, full-body visible in each panel."
     )
 
     if template_set == 2:    # 生活杂志：三格日记卡片
         multi_scene_prompt = (
             (
                 f"[Magazine-style 3-panel collage] {desc} showcased across 3 lifestyle scenes with thin white card borders. "
-                f"Panel 1: {_ms_scene1} — Chinese female model {outfit}, relaxed natural pose, {_ms_s1_label}; "
+                f"Panel 1: {_ms_scene1} — {_model_subject} {outfit}, relaxed natural pose, {_ms_s1_label}; "
                 f"Panel 2: {_ms_scene2} — model {outfit}, candid interaction, {_ms_s2_label}; "
                 f"Panel 3: {_ms_scene3} — model {outfit}, full-body visible, {_ms_s3_label}. "
                 f"Heading \"{ms_heading}\" at top. Bottom: \"{ms_left}\" left, \"{ms_right}\" right. "
@@ -670,7 +891,7 @@ def build_prompt(type_id: str, desc: str, selling_points: list,
         multi_scene_prompt = (
             (
                 f"[Minimal 2-panel split] Clean bold dividing line at center. "
-                f"LEFT: {_ms_scene1}, Chinese female model {outfit}, clean negative space, {_ms_s1_label}. "
+                f"LEFT: {_ms_scene1}, {_model_subject} {outfit}, clean negative space, {_ms_s1_label}. "
                 f"RIGHT: {_ms_scene2}, model {outfit}, airy composition, {_ms_s2_label}. "
                 f"Centered heading \"{ms_heading}\". Bottom: \"{ms_left}\" left, \"{ms_right}\" right. "
                 f"Luxury minimal aesthetic, high contrast. {_ms_consistency} "
@@ -686,7 +907,7 @@ def build_prompt(type_id: str, desc: str, selling_points: list,
         multi_scene_prompt = (
             (
                 f"[Dynamic diagonal collage] 45-degree bold split. "
-                f"Upper-left: {_ms_scene1}, Chinese female model {outfit}, energetic pose, {_ms_s1_label}. "
+                f"Upper-left: {_ms_scene1}, {_model_subject} {outfit}, energetic pose, {_ms_s1_label}. "
                 f"Lower-right: {_ms_scene2}, model {outfit}, dynamic movement, {_ms_s2_label}. "
                 f"Centered heading \"{ms_heading}\" bold. Bottom: \"{ms_left}\" left, \"{ms_right}\" right. "
                 f"High-energy POP composition, saturated vibrant tones. {_ms_consistency} "
@@ -702,7 +923,7 @@ def build_prompt(type_id: str, desc: str, selling_points: list,
         multi_scene_prompt = (
             (
                 f"[Cinematic 3-panel collage] Deep dark aesthetic, moody lighting. "
-                f"Panel 1: {_ms_scene1}, Chinese female model {outfit}, dramatic shadows, {_ms_s1_label}; "
+                f"Panel 1: {_ms_scene1}, {_model_subject} {outfit}, dramatic shadows, {_ms_s1_label}; "
                 f"Panel 2: {_ms_scene2}, model {outfit}, atmospheric, {_ms_s2_label}; "
                 f"Panel 3: {_ms_scene3}, model {outfit}, editorial pose, {_ms_s3_label}. "
                 f"Heading \"{ms_heading}\" in gold. Bottom: \"{ms_left}\" left, \"{ms_right}\" right. "
@@ -715,11 +936,39 @@ def build_prompt(type_id: str, desc: str, selling_points: list,
                 f"{TEXT_RENDER} {QUALITY}{lock_tail}{ref_tail}"
             )
         )
+    elif template_set == 6:  # 非对称布局：左侧大图+右侧小图（2026.04 新增）
+        multi_scene_prompt = (
+            (
+                f"[Asymmetric Product Showcase Layout] Professional collage with hero main image and detail insets. "
+                f"Layout: Left 60% — large hero shot of {_ms_scene1} with {_model_subject} {outfit}, {_ms_s1_label}. "
+                f"Right 40% — vertical stack of 2-3 detail panels with labels. "
+                f"Detail Panel 1: {_ms_scene2}, {_ms_s2_label} — tight crop focusing on key design feature. "
+                f"Detail Panel 2: {_ms_scene3}, {_ms_s3_label} — clean composition showing product in use context. "
+                f"Thin white divider separating left and right sections. "
+                f"Top-left heading \"{ms_heading}\" with subtle shadow. "
+                f"Bottom-left: \"{ms_left}\". Bottom-right: \"{ms_right}\". "
+                f"Style: photorealistic commercial photography, soft focus backgrounds, clean composition. "
+                f"Color: warm inviting tones, natural saturation, no oversaturation. "
+                f"{_ms_consistency} {TEXT_RENDER} {QUALITY}{lock_tail}{ref_tail}{_sp_model_lock}"
+            ) if is_apparel else (
+                f"[Asymmetric Product Showcase Layout] Professional collage with hero main image and detail insets. "
+                f"Layout: Left 60% — large hero shot of {desc} in {_ms_scene1}, {_ms_s1_label}. "
+                f"Right 40% — vertical stack of 2-3 detail panels with labels. "
+                f"Detail Panel 1: {_ms_scene2}, {_ms_s2_label} — tight crop focusing on key feature. "
+                f"Detail Panel 2: {_ms_scene3}, {_ms_s3_label} — clean composition showing product in use. "
+                f"Thin white divider separating left and right sections. "
+                f"Top-left heading \"{ms_heading}\" with subtle shadow. "
+                f"Bottom-left: \"{ms_left}\". Bottom-right: \"{ms_right}\". "
+                f"Style: photorealistic commercial photography, warm natural tones. "
+                f"CRITICAL: same {desc} in ALL panels — identical design, color, proportions. "
+                f"{TEXT_RENDER} {QUALITY}{lock_tail}{ref_tail}"
+            )
+        )
     else:                    # 默认：专业多场景结构（基于用户提供的最佳模板）
         multi_scene_prompt = (
             (
                 f"[Commercial Product Showcase Collage] A single {desc} showcased across 3 distinct lifestyle scenes, "
-                f"emphasizing versatility. All panels show SAME product worn by consistent relatable young East Asian female model, full-body visible. "
+                f"emphasizing versatility. All panels show SAME product worn by consistent relatable {_model_subject}, full-body visible. "
                 f"Scene ①: {_ms_scene1} — {_ms_s1_label}, natural light, authentic interaction; "
                 f"Scene ②: {_ms_scene2} — {_ms_s2_label}, dynamic natural pose, genuine atmosphere; "
                 f"Scene ③: {_ms_scene3} — {_ms_s3_label}, scenic backdrop, full-body shot. "
@@ -742,6 +991,38 @@ def build_prompt(type_id: str, desc: str, selling_points: list,
             )
         )
 
+    # ── 三角度拼图（正面/侧面/背面，360度展示）────────────────────────────────
+    # 当仅提供一张正面图时，自动生成三角度拼图以实现360度可见性
+    three_angle_view_prompt = (
+        (
+            f"[Three-Angle Product View - Front/Side/Back Collage] A single image divided into THREE EQUAL-SIZED PANELS showing {_model_subject} wearing {desc} from different angles. "
+            f"LEFT PANEL: Front view - model facing forward, full body from head to toe visible, showing front design, neckline, and overall silhouette. "
+            f"MIDDLE PANEL: Side view - model standing in profile, full body visible, showing side silhouette, sleeve/sleeveless detail, and fabric drape. "
+            f"RIGHT PANEL: Back view - model with back to camera, full body visible, showing back neckline, back design, and complete back silhouette. "
+            f"CRITICAL REQUIREMENTS: "
+            f"1. All three panels must show the EXACT SAME {desc} - identical design, color, print pattern, proportions. "
+            f"2. All panels must be FULL-BODY shots including head, hair, shoulders, torso, legs, feet. NO cropping or body cutoffs. "
+            f"3. All three panels must be the SAME SIZE and arranged horizontally with equal width. "
+            f"4. Use thin white dividers between panels. "
+            f"5. Clean white/light gray studio background, soft even lighting, professional commercial photography. "
+            f"6. Sharp focus, natural skin tones, realistic fabric rendering. "
+            f"Layout: [FRONT VIEW | SIDE VIEW | BACK VIEW] - three equal horizontal panels. "
+            f"{_ms_consistency} {QUALITY}{lock_tail}{ref_tail}{_sp_model_lock}"
+        ) if is_apparel else (
+            f"[Three-Angle Product View - Front/Side/Back Collage] A single image divided into THREE EQUAL-SIZED PANELS showing {desc} from different angles. "
+            f"LEFT PANEL: Front view - showing front design, main features, and front details. "
+            f"MIDDLE PANEL: Side view - showing side profile, side details, and dimensional characteristics. "
+            f"RIGHT PANEL: Back view - showing back panel, back design, and reverse-side features. "
+            f"CRITICAL REQUIREMENTS: "
+            f"1. All three panels must show the EXACT SAME product - identical design, color, proportions. "
+            f"2. All three panels must be the SAME SIZE and arranged horizontally with equal width. "
+            f"3. Use thin white dividers between panels. "
+            f"4. Clean white/light gray studio background, professional commercial photography. "
+            f"Layout: [FRONT VIEW | SIDE VIEW | BACK VIEW] - three equal horizontal panels. "
+            f"{QUALITY}{lock_tail}{ref_tail}"
+        )
+    )
+
     prompts = {
         "white_bg": f"{desc}, {white_bg_composition}, product occupies 88% of frame, clean studio lighting with soft shadow. No text.{ref_tail} {QUALITY}",
         "key_features": key_features_prompt,
@@ -750,6 +1031,7 @@ def build_prompt(type_id: str, desc: str, selling_points: list,
         "lifestyle": lifestyle_prompt,
         "model": model_prompt,
         "multi_scene": multi_scene_prompt,
+        "three_angle_view": three_angle_view_prompt,
     }
 
     return prompts.get(type_id, f"{desc}. {QUALITY}")
@@ -821,7 +1103,64 @@ def _to_tongyi_image_entry(path_or_url: str) -> dict:
 
 def generate_openai(key: str, prompt: str, base_url: str = "", model: str = "",
                     reference_image: str = "", **_kw) -> bytes:
-    url = (base_url.rstrip("/") + "/images/generations") if base_url else DEFAULT_URLS["openai"]
+    """OpenAI 图像生成 — 支持 dall-e-3 和 GPT Image (gpt-image-1.5 等)。
+
+    reference_image: 可选，本地文件路径或 URL（多个用逗号分隔）。传入后使用 /v1/images/edits 端点（图生图）。
+                    注意：dall-e-3 暂不支持 edits，请使用 gpt-image-1.5 或 gpt-image-1-mini。
+    """
+    if reference_image:
+        # ── Edits 模式（图生图）────────────────────────────────────────────────────
+        # 检测是否为 GPT Image 模型（支持 edits）
+        is_gpt_image = model and model.startswith("gpt-image")
+        if not is_gpt_image and model.startswith("dall-e"):
+            # dall-e-3/dall-e-2 不支持 edits，警告并回退到纯文生图
+            print(f"    ⚠️  OpenAI {model} 不支持参考图（edits），将忽略参考图使用纯文生图。", file=sys.stderr)
+            print(f"    💡 如需图生图，请使用 GPT Image 模型（如 gpt-image-1.5）", file=sys.stderr)
+            # 回退到纯文生图模式
+            url = (base_url.rstrip("/") + "/v1/images/generations") if base_url else DEFAULT_URLS["openai"]
+            resp = requests.post(
+                url,
+                headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
+                json={"model": model, "prompt": prompt, "size": "1024x1024", "quality": "hd", "response_format": "b64_json", "n": 1},
+                timeout=_kw.get('request_timeout', 180),
+            )
+            resp.raise_for_status()
+            return base64.b64decode(resp.json()["data"][0]["b64_json"])
+
+        # GPT Image edits 模式
+        url = (base_url.rstrip("/") + "/v1/images/edits") if base_url else "https://api.openai.com/v1/images/edits"
+
+        # 解析多个参考图（逗号分隔）
+        ref_images = [img.strip() for img in reference_image.split(",") if img.strip()]
+
+        # OpenAI edits 要求 multipart/form-data
+        # 多个图片用 image[] 数组格式
+        files = []
+        for i, ref_path in enumerate(ref_images):
+            b64_data, mime = _to_base64_and_mime(ref_path)
+            # requests 会自动处理相同 key 的多个字段（生成 image[] 格式）
+            files.append(("image[]", (f"image{i}.{mime.split('/')[-1]}", base64.b64decode(b64_data), mime)))
+
+        data = {
+            "model": model,
+            "prompt": prompt,
+            "size": "1024x1024",
+            "response_format": "b64_json",
+            "n": 1,
+        }
+
+        resp = requests.post(
+            url,
+            headers={"Authorization": f"Bearer {key}"},
+            files=files,
+            data=data,
+            timeout=_kw.get('request_timeout', 180),
+        )
+        resp.raise_for_status()
+        return base64.b64decode(resp.json()["data"][0]["b64_json"])
+
+    # ── 纯文生图模式────────────────────────────────────────────────────────────────
+    url = (base_url.rstrip("/") + "/v1/images/generations") if base_url else DEFAULT_URLS["openai"]
     resp = requests.post(
         url,
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
@@ -840,10 +1179,107 @@ def generate_gemini(key: str, prompt: str, base_url: str = "", model: str = "",
       - 官方 API（generativelanguage.googleapis.com）→ x-goog-api-key + ?key= query
       - 代理 API（自定义 base_url）→ Authorization: Bearer（多数代理的标准方式）
 
-    reference_image: 可选，传入后作为 inline_data 参考图。
+    reference_image: 可选，传入后作为 inline_data 参考图（原生格式）或 multipart image[]（OpenAI 格式）。
+
+    2026.04 新增：兼容 OpenAI 格式的代理（检测 /v1/ 路径格式），支持 generations 和 edits 端点。
     """
+
+    # Gemini 默认超时时间较长（edits 端点可能需要更长时间处理）
+    gemini_timeout = _kw.get('request_timeout', 600)  # 默认 600 秒（10 分钟）
+
+    # ── 检测是否为 OpenAI 兼容格式的代理 ──
+    # 检测条件：base_url 包含 /v1/ 路径格式（如 /v1/images/generations）
+    is_openai_format = base_url and "/v1/" in base_url
+
+    if is_openai_format:
+        # ── OpenAI 兼容格式 ──
+
+        # 如果有参考图，使用 edits 端点
+        if reference_image:
+            url = base_url.rstrip("/") if base_url else base_url
+            # 替换 generations 为 edits
+            if "/images/generations" in url:
+                url = url.replace("/images/generations", "/images/edits")
+            elif not url.endswith("/images/edits"):
+                url = url.rstrip("/") + "/images/edits"
+
+            # 解析多个参考图（逗号分隔）
+            ref_images = [img.strip() for img in reference_image.split(",") if img.strip()]
+
+            # multipart/form-data with image[] array
+            files = []
+            for i, ref_path in enumerate(ref_images):
+                b64_data, mime = _to_base64_and_mime(ref_path)
+                files.append(("image[]", (f"image{i}.{mime.split('/')[-1]}", base64.b64decode(b64_data), mime)))
+
+            data = {
+                "model": model or "nano-banana",  # 通用代理常用模型
+                "prompt": prompt,
+                "n": 1,
+            }
+
+            resp = requests.post(
+                url,
+                headers={"Authorization": f"Bearer {key}"},
+                files=files,
+                data=data,
+                timeout=gemini_timeout,
+            )
+            resp.raise_for_status()
+            response_data = resp.json()
+
+            # OpenAI 格式的响应：data[0].b64_json 或 data[0].url
+            if "data" in response_data and len(response_data["data"]) > 0:
+                img_data = response_data["data"][0]
+                if "b64_json" in img_data:
+                    return base64.b64decode(img_data["b64_json"])
+                elif "url" in img_data:
+                    img_resp = requests.get(img_data["url"], timeout=60)
+                    img_resp.raise_for_status()
+                    return img_resp.content
+
+            raise RuntimeError(f"OpenAI 格式 edits 代理响应中未找到图片数据: {response_data}")
+
+        # ── 无参考图：generations 端点 ──
+        url = base_url.rstrip("/") if base_url else base_url
+        # 确保路径是 /v1/images/generations
+        if not url.endswith("/images/generations"):
+            url = url.rstrip("/") + "/images/generations"
+
+        headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+
+        # OpenAI 格式的请求体
+        payload = {
+            "model": model or "gemini-3.1-flash-image-preview",
+            "prompt": prompt,
+            "n": 1,
+            "size": "1:1",  # 比率格式
+            "quality": "low"
+        }
+
+        resp = requests.post(
+            url,
+            headers=headers,
+            json=payload,
+            timeout=gemini_timeout,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        # OpenAI 格式的响应：data[0].b64_json 或 data[0].url
+        if "data" in data and len(data["data"]) > 0:
+            img_data = data["data"][0]
+            if "b64_json" in img_data:
+                return base64.b64decode(img_data["b64_json"])
+            elif "url" in img_data:
+                img_resp = requests.get(img_data["url"], timeout=60)
+                img_resp.raise_for_status()
+                return img_resp.content
+
+        raise RuntimeError(f"OpenAI 格式代理响应中未找到图片数据: {data}")
+
+    # ── Gemini 原生格式 ──
     is_official = not base_url
-    # ── 拼接 URL ──
     if base_url:
         url = base_url
     elif model and model != DEFAULT_MODELS["gemini"]:
@@ -851,7 +1287,6 @@ def generate_gemini(key: str, prompt: str, base_url: str = "", model: str = "",
     else:
         url = DEFAULT_URLS["gemini"]
 
-    # ── 鉴权头 ──
     if is_official:
         req_url = f"{url}?key={key}" if "?" not in url else url
         headers = {"x-goog-api-key": key, "Content-Type": "application/json"}
@@ -859,11 +1294,15 @@ def generate_gemini(key: str, prompt: str, base_url: str = "", model: str = "",
         req_url = url
         headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
 
-    # ── 构建 parts：参考图（可选）+ text prompt ──
     parts = []
     if reference_image:
-        b64_data, mime = _to_base64_and_mime(reference_image)
-        parts.append({"inline_data": {"mime_type": mime, "data": b64_data}})
+        # 支持多张参考图（逗号分隔）
+        ref_images = [img.strip() for img in reference_image.split(",") if img.strip()]
+        for ref_img in ref_images:
+            b64_data, mime = _to_base64_and_mime(ref_img)
+            parts.append({"inline_data": {"mime_type": mime, "data": b64_data}})
+        if len(ref_images) > 1:
+            print(f"    📎 已传递 {len(ref_images)} 张参考图", flush=True)
     parts.append({"text": prompt})
 
     resp = requests.post(
@@ -879,7 +1318,7 @@ def generate_gemini(key: str, prompt: str, base_url: str = "", model: str = "",
                 },
             },
         },
-        timeout=_kw.get('request_timeout', 180),
+        timeout=gemini_timeout,
     )
     resp.raise_for_status()
     data = resp.json()
@@ -962,7 +1401,12 @@ def generate_tongyi(key: str, prompt: str, base_url: str = "", model: str = "",
     # ── 构建 messages content ──
     content = []
     if reference_image:
-        content.append(_to_tongyi_image_entry(reference_image))
+        # 支持多张参考图（逗号分隔）
+        ref_images = [img.strip() for img in reference_image.split(",") if img.strip()]
+        for ref_img in ref_images:
+            content.append(_to_tongyi_image_entry(ref_img))
+        if len(ref_images) > 1:
+            print(f"    📎 已传递 {len(ref_images)} 张参考图", flush=True)
     content.append({"text": prompt})
 
     # ── 请求头 ──
@@ -1038,7 +1482,11 @@ def generate_doubao(key: str, prompt: str, base_url: str = "", model: str = "",
         "n": 1,
     }
     if reference_image:
-        body["image"] = [_to_image_input(reference_image)]
+        # 支持多张参考图（逗号分隔）
+        ref_images = [img.strip() for img in reference_image.split(",") if img.strip()]
+        body["image"] = [_to_image_input(ref) for ref in ref_images]
+        if len(ref_images) > 1:
+            print(f"    📎 已传递 {len(ref_images)} 张参考图", flush=True)
     resp = requests.post(
         url,
         headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
@@ -1117,13 +1565,16 @@ def main():
                         help="全局视觉风格模板：1=默认商拍 2=生活杂志 3=极简高冷 4=活力爆款 5=暗调质感")
     parser.add_argument("--per-type-templates", default="",
                         help="按图类型单独指定模板，格式：key_features:2,material:3（覆盖 --template-set）")
+    parser.add_argument("--key-features-style", default="",
+                        choices=["magnifier", "icon_list", "annotation", "split"],
+                        help="核心卖点图独立样式（优先级高于 template_set）：magnifier=放大镜气泡 icon_list=信息图标列表 annotation=标注线指示 split=分割板块")
     parser.add_argument("--negative-prompt", default="", help="反向提示词，描述不希望在画面中出现的内容（上限500字符）")
     parser.add_argument("--lang", default="zh", choices=["zh", "en"],
                         help="图片内嵌文案语言：zh（中文，默认）/ en（英文，国际平台）")
     parser.add_argument("--output-dir", default="./output/",
                         help="输出目录，默认 ./output/")
     parser.add_argument("--request-timeout", type=int, default=180,
-                        help="HTTP 请求超时时间（秒），默认 180s")
+                        help="HTTP 请求超时时间（秒），默认 180s（Gemini 默认 600s）")
     parser.add_argument("--poll-max-wait", type=int, default=600,
                         help="通义万象异步任务最大轮询等待时间（秒），默认 600s")
     args = parser.parse_args()
@@ -1142,6 +1593,16 @@ def main():
     print(f"📦 供应商: {args.provider}  模型: {model}")
 
     product = json.loads(args.product)
+
+    # ── 字段规范化：兼容 analyze.py 旧版输出 ─────────────────────────────────
+    # ① usage_scenes（旧版字段名）→ target_scenes
+    if "usage_scenes" in product and "target_scenes" not in product:
+        product["target_scenes"] = product["usage_scenes"]
+    # ② product_style 降级：从 product_subtype / product_category 填充
+    if not product.get("product_style"):
+        product["product_style"] = (
+            product.get("product_subtype") or product.get("product_category") or ""
+        )
 
     # 兼容新旧两种 JSON 格式
     # 旧格式：product_description_for_prompt（直接描述字符串）
@@ -1168,7 +1629,12 @@ def main():
     garment_position = product.get("garment_position", "non-apparel")
     # 目标场景和风格：从商品分析 JSON 中提取，用于场景展示图/多场景拼图动态生成
     target_scenes = product.get("target_scenes", [])
-    product_style = product.get("product_style", product.get("product_subtype", ""))
+    product_style = product.get("product_style", "")
+    # 新增字段（analyze.py ① 版本引入）
+    print_design_lock = product.get("print_design_lock", "")
+    target_audience = product.get("target_audience", "")
+    target_scene_envs = product.get("target_scene_envs", [])
+    product_type = product.get("product_type", "")
     types = [t.strip() for t in args.types.split(",")]
 
     output_dir = Path(args.output_dir)
@@ -1197,6 +1663,16 @@ def main():
     else:
         product_images = []
 
+    # 当只提供一张图片时，自动添加三角度拼图类型以实现360度展示
+    if len(product_images) == 1 and "three_angle_view" not in types:
+        print(f"📸 检测到仅提供一张商品图，将自动生成三角度拼图（正面/侧面/背面）以实现360度展示", flush=True)
+        # 在 multi_scene 之前插入 three_angle_view
+        try:
+            idx = types.index("multi_scene")
+            types.insert(idx, "three_angle_view")
+        except ValueError:
+            types.append("three_angle_view")
+
     input_image_type = product.get("input_image_type", "flat_lay")
 
     # 跟踪本次运行中已生成的模特图，用于后续 lifestyle/multi_scene 自动锁定模特
@@ -1219,18 +1695,34 @@ def main():
             #   2. 本次运行中刚生成的模特展示图（同一批次）
             #   3. output 目录已有的模特展示图（上次生成的，用于单独重新生成时）
             #   4. 商品参考图（兜底，无模特锁定）
+            #
+            # 重要：当有模特参考图时，同时传递商品参考图，确保AI知道要穿什么服装
             if type_id in ("model", "lifestyle", "multi_scene"):
                 if args.model_image:
                     ref_img = args.model_image
                     has_model_ref = True
+                    # 同时传递商品参考图（用逗号分隔，让AI同时参考模特和商品）
+                    if product_ref:
+                        ref_img = f"{args.model_image},{product_ref}"
+                        print(f"    📎 双参考图: 模特图 + 商品图", flush=True)
                 elif type_id != "model" and _generated_model_img:
                     ref_img = _generated_model_img
                     has_model_ref = True
-                    print(f"    🔒 锁定本次生成的模特图: {_generated_model_img}", flush=True)
+                    # 同时传递商品参考图
+                    if product_ref:
+                        ref_img = f"{_generated_model_img},{product_ref}"
+                        print(f"    🔒 双参考图: 本次模特图 + 商品图", flush=True)
+                    else:
+                        print(f"    🔒 锁定本次生成的模特图: {_generated_model_img}", flush=True)
                 elif type_id != "model" and (output_dir / "模特展示图.jpg").exists():
                     ref_img = str((output_dir / "模特展示图.jpg").resolve())
                     has_model_ref = True
-                    print(f"    🔒 自动使用已有模特图: {ref_img}", flush=True)
+                    # 同时传递商品参考图
+                    if product_ref:
+                        ref_img = f"{ref_img},{product_ref}"
+                        print(f"    🔒 双参考图: 已有模特图 + 商品图", flush=True)
+                    else:
+                        print(f"    🔒 自动使用已有模特图: {ref_img}", flush=True)
                 else:
                     ref_img = product_ref
                     has_model_ref = False
@@ -1239,16 +1731,36 @@ def main():
                 has_model_ref = False
 
             tpl = per_type_tpl.get(type_id, args.template_set)
+            # 获取 model_ethnicity（从 product 中，默认为 asian）
+            model_ethnicity = product.get("model_ethnicity", "asian")
             prompt = build_prompt(type_id, desc, selling_points,
                                   model_style=args.model_style,
                                   has_model_ref=has_model_ref,
                                   lang=args.lang,
                                   garment_position=garment_position,
+                                  print_design_lock=print_design_lock,
                                   has_product_ref=has_product_ref,
                                   input_image_type=input_image_type,
                                   template_set=tpl,
+                                  key_features_style=args.key_features_style,
+                                  per_type_templates=per_type_tpl,
                                   target_scenes=target_scenes,
-                                  product_style=product_style)
+                                  product_style=product_style,
+                                  target_audience=target_audience,
+                                  target_scene_envs=target_scene_envs,
+                                  product_type=product_type,
+                                  model_ethnicity=model_ethnicity)
+
+            # 调试输出：验证参考图传递和 prompt 约束
+            if ref_img:
+                print(f"    📎 参考图: {ref_img} (has_product_ref={has_product_ref})", flush=True)
+                if has_product_ref and "PRODUCT_REF_LOCK" in prompt:
+                    print(f"    🔒 商品外观约束已启用", flush=True)
+                # 临时调试：显示 prompt 前几个字符（验证约束存在）
+                if "--debug" in sys.argv:  # 临时调试模式
+                    preview = prompt[:200] + "..." if len(prompt) > 200 else prompt
+                    print(f"    📝 Prompt 预览: {preview}", flush=True)
+
             img_bytes = generator(api_key, prompt, base_url, model,
                                   reference_image=ref_img,
                                   negative_prompt=args.negative_prompt,

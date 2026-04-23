@@ -1,4 +1,4 @@
-# 电商套图：7种图片类型规格与 Prompt 模板
+# 电商套图：8种图片类型规格与 Prompt 模板（+自动补充）
 
 每种图类型均包含：视觉规格、文案规范、Prompt 模板（可编辑）。
 **核心原则**：严格保持商品一致性，不得改动商品结构、颜色、比例及细节。
@@ -902,3 +902,182 @@ catalog elegance, generous spacing, minimal sophistication
 modern geometric fonts, subtle opacity variations, clean minimal layout,
 contemporary typography, Instagram-worthy style
 ```
+
+---
+
+## 图8：电商详情图（Ecommerce Detail Page）
+
+### 视觉规格（2026.04 新增）
+
+**整体布局**：完整电商详情页设计，产品英雄图 80% 占比，下方堆叠参数、卖点、多颜色版本展示。
+
+**分区设计**：
+1. **英雄区** (80% 画面)：
+   - 商品右侧 45° 角，完整结构无裁剪
+   - 干净背景或渐变色
+   
+2. **顶部文字区** (10%)：
+   - 主标题（商品名简要）
+   - 副标题（核心卖点一句话）
+   - 居中或左对齐
+   
+3. **功能图标栏** (中部)：
+   - 4 个水平排列图标
+   - 每个图标对应一个卖点
+   - 简洁现代风格
+   
+4. **参数表** (下方)：
+   - 产品、规格、型号、尺寸、重量、功率、电池等
+   - 表格或卡片式排列
+   - 技术化清晰排版
+   
+5. **卖点卡片** (下方)：
+   - 6 格（2×3 网格）
+   - 每格：图标 + 标题 + 短描述
+   - 来自 selling_points 字段
+   
+6. **使用场景** (下方)：
+   - 3+ 张真实使用场景
+   - 与多场景拼图对应
+   
+7. **多颜色版本** (底部)：
+   - 相同产品结构，不同颜色版本（2-3 个）
+   - 强调产品多样性
+
+### 文案规范
+
+**中文版**：
+```
+主标题：[商品名]
+副标题：[核心卖点一句话]
+图标1：[第一卖点标题]
+图标2：[第二卖点标题]
+图标3：[第三卖点标题]
+图标4：[额外特性]
+```
+
+**英文版**：
+```
+Main Heading: [PRODUCT_NAME]
+Sub-heading: [CORE_SELLING_POINT_ONE_LINER]
+Icon 1: [FEATURE1]
+Icon 2: [FEATURE2]
+Icon 3: [FEATURE3]
+Icon 4: [ADDITIONAL_FEATURE]
+```
+
+### Prompt 模板
+
+```
+High-end e-commerce product detail page layout.
+CRITICAL: [PRODUCT_DESCRIPTION] is the absolute hero product in 80% of frame, right-aligned 45-degree angle,
+complete structure, sharp edges, no cropping, intact design.
+
+TOP MODULE (20% height):
+Main heading "[PRODUCT_TITLE]" in bold sans-serif, sub-heading "[PRODUCT_SUBTITLE]" below.
+
+FEATURE ICONS (centered horizontal bar, 4 icons):
+Icon 1: "[FEATURE1]"; Icon 2: "[FEATURE2]"; Icon 3: "[FEATURE3]"; Icon 4: "[ADDITIONAL]".
+
+BOTTOM MODULES (stacked vertically, 30% height):
+1. Three-view technical drawing (front/side/back 3D projections with dimension callouts)
+2. Product Parameter Table — [PRODUCT_DESCRIPTION], Model/Power/Battery/Size/Weight/Interface filled with realistic specs
+3. Six Core Feature Cards (2×3 grid, each: icon + bold label + short description)
+4. Usage Scenes (realistic context images)
+5. Multi-Color Version Display (2-3 product variations maintaining exact same structure, different colors only)
+
+VISUAL STYLE:
+8K ultra-HD commercial photography, clean professional e-commerce layout,
+strong product-focused lighting, high contrast, true-to-life colors,
+sharp text rendering (no distortion), balanced spacing, comprehensive information hierarchy.
+Background: gradient or clean white, never cluttered.
+
+CRITICAL CONSTRAINTS:
+Strict product consistency — same design, same structure, no redesign.
+All parameters and specifications realistic and accurate.
+No generic placeholder text. Maintain professional e-commerce standard.
+```
+
+---
+
+## 自动补充：三角度拼图（Three-Angle View）
+
+### 触发条件
+
+**仅当提供单张商品图时自动生成**。`generate.py` 检测到 `len(product_images) == 1` 时，自动在 `multi_scene` 之前插入此类型，实现 360° 展示。
+
+### 视觉规格
+
+**布局**：三等宽列拼图，左中右分别为正面、侧面、背面。
+
+- **背景**：纯白或浅灰（保持专业商拍风格）
+- **每列占比**：33.3% 等宽
+- **分隔线**：细白色分隔线（1-2px）
+- **照明**：统一工作室灯光
+- **人物（仅服装）**：同一模特，三个角度的自然站姿
+
+### 文案
+
+**无文字**（纯视觉展示）。可在底部标注：
+```
+LEFT: 正面 / FRONT VIEW
+CENTER: 侧面 / SIDE VIEW  
+RIGHT: 背面 / BACK VIEW
+```
+
+### Prompt 模板（服装类）
+
+```
+[Three-Angle Product View - Front/Side/Back Collage]
+A single image divided into THREE EQUAL-SIZED PANELS showing [PRODUCT_DESCRIPTION] from different angles.
+
+LEFT PANEL: Front view - model facing forward, full body from head to toe visible,
+showing front design, neckline, and overall silhouette.
+
+MIDDLE PANEL: Side view - model standing in profile, full body visible,
+showing side silhouette, sleeve/sleeveless detail, and fabric drape.
+
+RIGHT PANEL: Back view - model with back to camera, full body visible,
+showing back neckline, back design, and complete back silhouette.
+
+CRITICAL REQUIREMENTS:
+1. All three panels must show the EXACT SAME [PRODUCT_DESCRIPTION] —
+   identical design, color, print pattern, proportions.
+2. All panels must be FULL-BODY shots including head, hair, shoulders, torso, legs, feet.
+   NO cropping or body cutoffs.
+3. All three panels must be the SAME SIZE and arranged horizontally with equal width.
+4. Use thin white dividers between panels.
+5. Clean white/light gray studio background, soft even lighting,
+   professional commercial photography.
+6. Sharp focus, natural skin tones, realistic fabric rendering.
+
+Layout: [FRONT VIEW | SIDE VIEW | BACK VIEW] - three equal horizontal panels.
+Style: photorealistic commercial product photography, no stylization.
+```
+
+### Prompt 模板（非服装类）
+
+```
+[Three-Angle Product View - Front/Side/Back Collage]
+A single image divided into THREE EQUAL-SIZED PANELS showing [PRODUCT_DESCRIPTION] from different angles.
+
+LEFT PANEL: Front view - showing front design, main features, and front details.
+MIDDLE PANEL: Side view - showing side profile, side details, and dimensional characteristics.
+RIGHT PANEL: Back view - showing back panel, back design, and reverse-side features.
+
+CRITICAL REQUIREMENTS:
+1. All three panels must show the EXACT SAME product —
+   identical design, color, proportions.
+2. All three panels must be the SAME SIZE and arranged horizontally with equal width.
+3. Use thin white dividers between panels.
+4. Clean white/light gray studio background, professional commercial photography.
+
+Layout: [FRONT VIEW | SIDE VIEW | BACK VIEW] - three equal horizontal panels.
+Style: photorealistic commercial product photography, high-detail, clear visibility.
+```
+
+---
+
+**更新日志**：
+- 2026.04：新增图8（电商详情图）和自动补充三角度拼图，支持模板⑥非对称布局
+- 2026.03：初版 7 种图类型规格

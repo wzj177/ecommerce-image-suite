@@ -140,6 +140,15 @@ DEFAULT_URLS = {
 }
 
 
+# ── Base64 填充修复 ───────────────────────────────────────────────────────────
+
+def _fix_base64_padding(b64_string: str) -> str:
+    """修复 base64 字符串的填充问题，确保长度是 4 的倍数。"""
+    # 计算需要添加的填充字符数
+    padding_needed = (4 - len(b64_string) % 4) % 4
+    return b64_string + "=" * padding_needed
+
+
 # ── 图片类型 → 中文文件名映射 ────────────────────────────────────────────────
 
 TYPE_NAMES_ZH = {
@@ -150,6 +159,7 @@ TYPE_NAMES_ZH = {
     "lifestyle":     "场景展示图",
     "model":         "模特展示图",
     "multi_scene":   "多场景拼图",
+    "ecommerce_detail": "电商详情图",
     "three_angle_view": "三角度拼图",
 }
 
@@ -358,6 +368,7 @@ TYPE_IMAGE_SLOT = {
     "lifestyle":     0,
     "model":         0,
     "multi_scene":   0,
+    "ecommerce_detail": 0,  # 正面
     "three_angle_view": 0,  # 使用正面图，AI生成三角度
 }
 
@@ -1023,6 +1034,49 @@ def build_prompt(type_id: str, desc: str, selling_points: list,
         )
     )
 
+    # ── 电商详情图 ────────────────────────────────────────────────────────────
+    # 2026.04 新增：完整电商详情页设计，包含产品主图+参数+卖点+多颜色
+    _ecd_title = _sp_title(sp, 0, lang) or ("产品详情" if lang == "zh" else "PRODUCT DETAILS")
+    _ecd_subtitle = _sp_desc(sp, 0, lang) or ("精选品质，值得拥有" if lang == "zh" else "Premium Quality, Worth Owning")
+
+    ecommerce_detail_prompt = (
+        f"High-end e-commerce product detail page layout. "
+        f"CRITICAL: {desc} is the absolute hero product in 80% of frame, right-aligned 45-degree angle, "
+        f"complete structure, sharp edges, no cropping, intact design. "
+        f"\n"
+        f"TOP MODULE (20% height): "
+        f"Main heading \"{_ecd_title}\" in bold sans-serif, sub-heading \"{_ecd_subtitle}\" below. "
+        f"\n"
+        f"FEATURE ICONS (centered horizontal bar, 4 icons): "
+        f"Icon 1: \"{kf_labels[0]}\"; Icon 2: \"{kf_labels[1]}\"; "
+        f"Icon 3: \"{kf_labels[2]}\"; Icon 4: \"{_sp_title(sp, 3, lang) or 'Featured'}\". "
+        f"\n"
+        f"BOTTOM MODULES (stacked vertically, 30% height): "
+        f"1. Three-view technical drawing (front/side/back 3D projections with dimension callouts) — "
+        f"   based on {desc} product structure, consistent proportions; "
+        f"2. Product Parameter Table — Product: {desc}, "
+        f"   Model/Power/Battery/Size/Weight/Interface (filled with realistic specs); "
+        f"3. Six Core Feature Cards (2×3 grid, each: icon + bold label + short description): "
+        f"   Features derived from key selling points - "
+        f"   {kf_labels[0]} / {kf_labels[1]} / {kf_labels[2]} / {_sp_title(sp, 3, lang) or 'More'}; "
+        f"4. Usage Scenes (realistic context images): "
+        f"   {_ts[0] if _ts else 'Outdoor'} / {_ts[1] if len(_ts) > 1 else 'Indoor'} / {_ts[2] if len(_ts) > 2 else 'Daily'}; "
+        f"5. Multi-Color Version Display (2-3 product variations maintaining exact same structure as main product, "
+        f"   different colors only). "
+        f"\n"
+        f"VISUAL STYLE: "
+        f"8K ultra-HD commercial photography, clean professional e-commerce layout, "
+        f"strong product-focused lighting, high contrast, true-to-life colors, "
+        f"sharp text rendering (no distortion), balanced spacing, comprehensive information hierarchy. "
+        f"Background: gradient or clean white, never cluttered. "
+        f"\n"
+        f"CRITICAL CONSTRAINTS: "
+        f"Strict product consistency — same design, same structure, no redesign. "
+        f"All parameters and specifications realistic and accurate. "
+        f"No generic placeholder text. Maintain professional e-commerce standard. "
+        f"{TEXT_RENDER}{ref_tail} {QUALITY}"
+    )
+
     prompts = {
         "white_bg": f"{desc}, {white_bg_composition}, product occupies 88% of frame, clean studio lighting with soft shadow. No text.{ref_tail} {QUALITY}",
         "key_features": key_features_prompt,
@@ -1031,6 +1085,7 @@ def build_prompt(type_id: str, desc: str, selling_points: list,
         "lifestyle": lifestyle_prompt,
         "model": model_prompt,
         "multi_scene": multi_scene_prompt,
+        "ecommerce_detail": ecommerce_detail_prompt,
         "three_angle_view": three_angle_view_prompt,
     }
 
@@ -1109,44 +1164,47 @@ def generate_openai(key: str, prompt: str, base_url: str = "", model: str = "",
                     注意：dall-e-3 暂不支持 edits，请使用 gpt-image-1.5 或 gpt-image-1-mini。
     """
     if reference_image:
-        # ── Edits 模式（图生图）────────────────────────────────────────────────────
-        # 检测是否为 GPT Image 模型（支持 edits）
+        # ── 图生图模式（使用 /images/edits 端点）────────────────────────────────────
+        # 检测是否为 GPT Image 模型
         is_gpt_image = model and model.startswith("gpt-image")
         if not is_gpt_image and model.startswith("dall-e"):
-            # dall-e-3/dall-e-2 不支持 edits，警告并回退到纯文生图
-            print(f"    ⚠️  OpenAI {model} 不支持参考图（edits），将忽略参考图使用纯文生图。", file=sys.stderr)
-            print(f"    💡 如需图生图，请使用 GPT Image 模型（如 gpt-image-1.5）", file=sys.stderr)
+            # dall-e-3/dall-e-2 不支持参考图，警告并回退到纯文生图
+            print(f"    ⚠️  OpenAI {model} 不支持参考图，将忽略参考图使用纯文生图。", file=sys.stderr)
+            print(f"    💡 如需图生图，请使用 GPT Image 模型（如 gpt-image-2）", file=sys.stderr)
             # 回退到纯文生图模式
             url = (base_url.rstrip("/") + "/v1/images/generations") if base_url else DEFAULT_URLS["openai"]
             resp = requests.post(
                 url,
                 headers={"Authorization": f"Bearer {key}", "Content-Type": "application/json"},
                 json={"model": model, "prompt": prompt, "size": "1024x1024", "quality": "hd", "response_format": "b64_json", "n": 1},
-                timeout=_kw.get('request_timeout', 180),
+                timeout=_kw.get('request_timeout', 360),
             )
             resp.raise_for_status()
-            return base64.b64decode(resp.json()["data"][0]["b64_json"])
+            return base64.b64decode(_fix_base64_padding(resp.json()["data"][0]["b64_json"]))
 
-        # GPT Image edits 模式
-        url = (base_url.rstrip("/") + "/v1/images/edits") if base_url else "https://api.openai.com/v1/images/edits"
+        # 使用 /images/edits 端点
+        # 检查 base_url 并构建正确的 URL
+        if base_url:
+            base_url_clean = base_url.rstrip("/")
+            # 直接拼接 /images/edits（用户的 BASE_URL 是 https://api.laozhang.ai/v1）
+            url = base_url_clean + "/images/edits"
+        else:
+            url = "https://api.openai.com/v1/images/edits"
 
-        # 解析多个参考图（逗号分隔）
+        # 解析多个参考图（OpenAI edits API 支持最多16张图片）
         ref_images = [img.strip() for img in reference_image.split(",") if img.strip()]
 
-        # OpenAI edits 要求 multipart/form-data
-        # 多个图片用 image[] 数组格式
+        # 使用 multipart/form-data 上传，使用 image[] 字段名支持多张图片
         files = []
         for i, ref_path in enumerate(ref_images):
             b64_data, mime = _to_base64_and_mime(ref_path)
-            # requests 会自动处理相同 key 的多个字段（生成 image[] 格式）
-            files.append(("image[]", (f"image{i}.{mime.split('/')[-1]}", base64.b64decode(b64_data), mime)))
+            # 使用 image[] 作为字段名（与 curl 示例一致）
+            files.append(("image[]", (f"image{i}.{mime.split('/')[-1]}", base64.b64decode(_fix_base64_padding(b64_data)), mime)))
 
         data = {
             "model": model,
             "prompt": prompt,
-            "size": "1024x1024",
-            "response_format": "b64_json",
-            "n": 1,
+            "response_format": "b64_json"
         }
 
         resp = requests.post(
@@ -1154,10 +1212,20 @@ def generate_openai(key: str, prompt: str, base_url: str = "", model: str = "",
             headers={"Authorization": f"Bearer {key}"},
             files=files,
             data=data,
-            timeout=_kw.get('request_timeout', 180),
+            timeout=_kw.get('request_timeout', 360),
         )
         resp.raise_for_status()
-        return base64.b64decode(resp.json()["data"][0]["b64_json"])
+
+        # 解析响应
+        response_data = resp.json()
+        try:
+            b64_value = response_data["data"][0]["b64_json"]
+            # 如果有 data:image/xxx;base64, 前缀，移除它
+            if b64_value.startswith("data:"):
+                b64_value = b64_value.split(",", 1)[1]
+            return base64.b64decode(_fix_base64_padding(b64_value))
+        except (KeyError, IndexError) as e:
+            raise RuntimeError(f"解析 OpenAI 响应失败: {e}\n响应内容: {str(response_data)[:500]}")
 
     # ── 纯文生图模式────────────────────────────────────────────────────────────────
     url = (base_url.rstrip("/") + "/v1/images/generations") if base_url else DEFAULT_URLS["openai"]
@@ -1168,7 +1236,7 @@ def generate_openai(key: str, prompt: str, base_url: str = "", model: str = "",
         timeout=_kw.get('request_timeout', 180),
     )
     resp.raise_for_status()
-    return base64.b64decode(resp.json()["data"][0]["b64_json"])
+    return base64.b64decode(_fix_base64_padding(resp.json()["data"][0]["b64_json"]))
 
 
 def generate_gemini(key: str, prompt: str, base_url: str = "", model: str = "",
@@ -1196,12 +1264,22 @@ def generate_gemini(key: str, prompt: str, base_url: str = "", model: str = "",
 
         # 如果有参考图，使用 edits 端点
         if reference_image:
-            url = base_url.rstrip("/") if base_url else base_url
-            # 替换 generations 为 edits
-            if "/images/generations" in url:
-                url = url.replace("/images/generations", "/images/edits")
-            elif not url.endswith("/images/edits"):
-                url = url.rstrip("/") + "/images/edits"
+            base_url_clean = base_url.rstrip("/")
+            # 如果 base_url 已经以 /images/edits 或 /v1/images/edits 结尾，直接使用
+            if base_url_clean.endswith("/images/edits") or base_url_clean.endswith("/v1/images/edits"):
+                url = base_url_clean
+            # 如果 base_url 包含 /images/generations，替换为 edits
+            elif "/images/generations" in base_url_clean:
+                url = base_url_clean.replace("/images/generations", "/images/edits")
+            # 如果 base_url 以 /v1 结尾（如 https://api.example.com/v1），拼接 /images/edits
+            elif base_url_clean.endswith("/v1"):
+                url = base_url_clean + "/images/edits"
+            # 如果 base_url 包含 /v1/ 路径格式（如 /v1/chat/completions），替换为 /v1/images/edits
+            elif "/v1/" in base_url_clean:
+                parts = base_url_clean.split("/v1/")
+                url = parts[0] + "/v1/images/edits"
+            else:
+                url = base_url_clean + "/images/edits"
 
             # 解析多个参考图（逗号分隔）
             ref_images = [img.strip() for img in reference_image.split(",") if img.strip()]
@@ -1210,7 +1288,7 @@ def generate_gemini(key: str, prompt: str, base_url: str = "", model: str = "",
             files = []
             for i, ref_path in enumerate(ref_images):
                 b64_data, mime = _to_base64_and_mime(ref_path)
-                files.append(("image[]", (f"image{i}.{mime.split('/')[-1]}", base64.b64decode(b64_data), mime)))
+                files.append(("image[]", (f"image{i}.{mime.split('/')[-1]}", base64.b64decode(_fix_base64_padding(b64_data)), mime)))
 
             data = {
                 "model": model or "nano-banana",  # 通用代理常用模型
@@ -1232,7 +1310,7 @@ def generate_gemini(key: str, prompt: str, base_url: str = "", model: str = "",
             if "data" in response_data and len(response_data["data"]) > 0:
                 img_data = response_data["data"][0]
                 if "b64_json" in img_data:
-                    return base64.b64decode(img_data["b64_json"])
+                    return base64.b64decode(_fix_base64_padding(img_data["b64_json"]))
                 elif "url" in img_data:
                     img_resp = requests.get(img_data["url"], timeout=60)
                     img_resp.raise_for_status()
@@ -1270,7 +1348,7 @@ def generate_gemini(key: str, prompt: str, base_url: str = "", model: str = "",
         if "data" in data and len(data["data"]) > 0:
             img_data = data["data"][0]
             if "b64_json" in img_data:
-                return base64.b64decode(img_data["b64_json"])
+                return base64.b64decode(_fix_base64_padding(img_data["b64_json"]))
             elif "url" in img_data:
                 img_resp = requests.get(img_data["url"], timeout=60)
                 img_resp.raise_for_status()
@@ -1324,7 +1402,7 @@ def generate_gemini(key: str, prompt: str, base_url: str = "", model: str = "",
     data = resp.json()
     for part in data["candidates"][0]["content"]["parts"]:
         if "inlineData" in part:
-            return base64.b64decode(part["inlineData"]["data"])
+            return base64.b64decode(_fix_base64_padding(part["inlineData"]["data"]))
     raise RuntimeError("Gemini 响应中未找到图片数据")
 
 
@@ -1339,7 +1417,7 @@ def generate_stability(key: str, prompt: str, base_url: str = "", model: str = "
         timeout=_kw.get('request_timeout', 180),
     )
     resp.raise_for_status()
-    return base64.b64decode(resp.json()["image"])
+    return base64.b64decode(_fix_base64_padding(resp.json()["image"]))
 
 
 def _is_wan_model(model: str) -> bool:
@@ -1447,7 +1525,7 @@ def generate_tongyi(key: str, prompt: str, base_url: str = "", model: str = "",
         img_url = _tongyi_poll_task(key, task_id, max_wait=poll_max_wait)
         if img_url.startswith("data:") or len(img_url) > 500:
             # base64 返回
-            return base64.b64decode(img_url.split(",", 1)[-1] if "," in img_url else img_url)
+            return base64.b64decode(_fix_base64_padding(img_url.split(",", 1)[-1] if "," in img_url else img_url))
         return requests.get(img_url, timeout=request_timeout).content
     else:
         # 同步接口直接返回图片 URL
@@ -1553,7 +1631,7 @@ def main():
     parser.add_argument("--api-key",    default="", help="API Key（也可通过环境变量传入）")
     parser.add_argument("--base-url",   default="", help="自定义 Base URL（也可通过环境变量传入）")
     parser.add_argument("--model",      default="", help="模型名称（也可通过环境变量传入，否则用默认值）")
-    parser.add_argument("--types",      default="white_bg,key_features,selling_pt,material,lifestyle,model,multi_scene",
+    parser.add_argument("--types",      default="white_bg,key_features,selling_pt,material,lifestyle,model,multi_scene,ecommerce_detail",
                         help="逗号分隔的套图类型")
     parser.add_argument("--model-style", default="standard", choices=["standard", "bodycon"],
                         help="模特展示风格：standard（标准商拍）/ bodycon（贴身合体，适用于紧身衣物）")
@@ -1573,8 +1651,8 @@ def main():
                         help="图片内嵌文案语言：zh（中文，默认）/ en（英文，国际平台）")
     parser.add_argument("--output-dir", default="./output/",
                         help="输出目录，默认 ./output/")
-    parser.add_argument("--request-timeout", type=int, default=180,
-                        help="HTTP 请求超时时间（秒），默认 180s（Gemini 默认 600s）")
+    parser.add_argument("--request-timeout", type=int, default=360,
+                        help="HTTP 请求超时时间（秒），默认 360s（Gemini 默认 600s）")
     parser.add_argument("--poll-max-wait", type=int, default=600,
                         help="通义万象异步任务最大轮询等待时间（秒），默认 600s")
     args = parser.parse_args()

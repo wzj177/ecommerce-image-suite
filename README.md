@@ -61,6 +61,64 @@ python3 scripts/check_providers.py
 | Google Gemini | GEMINI_API_KEY | 通常需要代理 |
 | Stability AI | STABILITY_API_KEY | 通常需要代理 |
 
+### 环境变量配置
+
+#### macOS / Linux
+
+临时生效可以直接在当前终端执行：
+
+```bash
+export DASHSCOPE_API_KEY="你的密钥"
+export ARK_API_KEY="你的密钥"
+```
+
+如果希望长期生效，可以写入 shell 配置文件后再执行 source：
+
+```bash
+echo 'export DASHSCOPE_API_KEY="你的密钥"' >> ~/.zshrc
+echo 'export ARK_API_KEY="你的密钥"' >> ~/.zshrc
+source ~/.zshrc
+```
+
+如果你使用的是 bash，则改写到 ~/.bashrc 或 ~/.bash_profile：
+
+```bash
+echo 'export DASHSCOPE_API_KEY="你的密钥"' >> ~/.bashrc
+echo 'export ARK_API_KEY="你的密钥"' >> ~/.bashrc
+source ~/.bashrc
+```
+
+#### Windows
+
+可以在系统界面的环境变量设置中新增对应变量，也可以在命令行里设置。
+
+PowerShell 当前会话生效：
+
+```powershell
+$env:DASHSCOPE_API_KEY="你的密钥"
+$env:ARK_API_KEY="你的密钥"
+```
+
+PowerShell 写入用户级环境变量：
+
+```powershell
+[System.Environment]::SetEnvironmentVariable("DASHSCOPE_API_KEY", "你的密钥", "User")
+[System.Environment]::SetEnvironmentVariable("ARK_API_KEY", "你的密钥", "User")
+```
+
+CMD 用户级环境变量：
+
+```cmd
+setx DASHSCOPE_API_KEY "你的密钥"
+setx ARK_API_KEY "你的密钥"
+```
+
+设置完成后，重新打开终端，再执行下面的检测命令确认是否生效：
+
+```bash
+python3 scripts/check_providers.py
+```
+
 ## 快速使用
 
 先分析商品图：

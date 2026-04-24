@@ -120,11 +120,3 @@ python3 scripts/check_providers.py
 
 1. [样例展示](./EXAMPLES.md)
 2. [商务合作](./BUSINESS.md)
-
-## 适合继续补充的内容
-
-如果要把这个仓库作为公开项目长期维护，下一步通常还会补三类信息：
-
-1. requirements.txt 或 pyproject.toml，明确依赖版本。
-2. LICENSE，明确开源授权方式。
-3. output 目录规范与更多非服饰类样例，例如电器、家居、3C。

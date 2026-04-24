@@ -1,0 +1,69 @@
+{
+  "product_name": "女童纯棉黄色Polo领短袖连衣裙",
+  "product_description_for_prompt": "Yellow baby girl's polo dress with short sleeves, white trim collar, two buttons, and flared skirt, made of soft cotton fabric.",
+  "product_type": "服装",
+  "garment_position": "full-body",
+  "visual_features": [
+    "Polo collar with white trim",
+    "Flared A-line skirt"
+  ],
+  "selling_points": [
+    {
+      "icon": "fabric",
+      "zh": "柔软纯棉材质",
+      "en": "Soft Cotton Fabric",
+      "zh_desc": "亲肤透气，呵护宝宝肌肤",
+      "en_desc": "Breathable, skin-friendly cotton",
+      "visual_keywords": [
+        "cotton",
+        "soft texture"
+      ]
+    },
+    {
+      "icon": "design",
+      "zh": "经典Polo领设计",
+      "en": "Classic Polo Collar",
+      "zh_desc": "简约时尚，百搭耐看",
+      "en_desc": "Timeless polo style design",
+      "visual_keywords": [
+        "polo collar",
+        "white trim"
+      ]
+    },
+    {
+      "icon": "fit",
+      "zh": "宽松A字版型",
+      "en": "Relaxed A-Line Fit",
+      "zh_desc": "活动自如，不束缚",
+      "en_desc": "Comfortable loose silhouette",
+      "visual_keywords": [
+        "A-line",
+        "flared skirt"
+      ]
+    },
+    {
+      "icon": "comfort",
+      "zh": "舒适短袖剪裁",
+      "en": "Comfortable Short Sleeve",
+      "zh_desc": "适合春夏日常穿着",
+      "en_desc": "Perfect for warm weather",
+      "visual_keywords": [
+        "short sleeve",
+        "lightweight"
+      ]
+    }
+  ],
+  "target_audience": "0-3岁女童家长，注重舒适与时尚感的亲子穿搭消费者",
+  "target_scenes": [
+    "日常外出",
+    "亲子出游",
+    "节日聚会"
+  ],
+  "product_style": "日系可爱",
+  "color": "pastel yellow",
+  "material": "cotton",
+  "style": "宽松",
+  "print_design": "无印花，纯色设计",
+  "print_design_lock": "no print, solid pastel yellow color, exact same pattern and position",
+  "product_name_zh": "萌黄Polo裙"
+}

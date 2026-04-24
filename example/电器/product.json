@@ -1,0 +1,68 @@
+{
+  "product_name": "Purple and Black Canister Vacuum Cleaner with Flexible Hose and Floor Nozzle",
+  "product_description_for_prompt": "Purple and black canister vacuum cleaner with transparent dust container, flexible hose, floor nozzle, and ergonomic handle design.",
+  "product_type": "家居",
+  "garment_position": "non-apparel",
+  "visual_features": [
+    "purple and black color scheme",
+    "transparent dust bin"
+  ],
+  "selling_points": [
+    {
+      "icon": "function",
+      "zh": "高效吸尘",
+      "en": "High Efficiency Cleaning",
+      "zh_desc": "强劲吸力，清洁无死角",
+      "en_desc": "Powerful suction, no blind spots",
+      "visual_keywords": [
+        "strong suction",
+        "dust collection"
+      ]
+    },
+    {
+      "icon": "design",
+      "zh": "人体工学设计",
+      "en": "Ergonomic Design",
+      "zh_desc": "轻便易操作，省力高效",
+      "en_desc": "Lightweight, easy to handle",
+      "visual_keywords": [
+        "ergonomic handle",
+        "compact body"
+      ]
+    },
+    {
+      "icon": "function",
+      "zh": "透明尘盒",
+      "en": "Transparent Dust Bin",
+      "zh_desc": "实时查看垃圾量，方便清理",
+      "en_desc": "See dust level, easy emptying",
+      "visual_keywords": [
+        "transparent container",
+        "dust monitoring"
+      ]
+    },
+    {
+      "icon": "scene",
+      "zh": "多场景适用",
+      "en": "Multi-Scene Use",
+      "zh_desc": "适用于地板、地毯、家具",
+      "en_desc": "For floors, carpets, furniture",
+      "visual_keywords": [
+        "floor cleaning",
+        "carpet use"
+      ]
+    }
+  ],
+  "target_audience": "家庭用户，注重家居清洁效率与便捷性的消费者",
+  "target_scenes": [
+    "家庭日常清洁",
+    "地毯与硬地板清洁"
+  ],
+  "product_style": "现代简约",
+  "color": "lavender purple and matte black",
+  "material": "plastic and metal",
+  "style": "compact and portable",
+  "print_design": "none",
+  "print_design_lock": "none",
+  "product_name_zh": "紫黑款桶式吸尘器"
+}

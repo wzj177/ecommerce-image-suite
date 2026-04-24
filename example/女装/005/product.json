@@ -1,0 +1,69 @@
+{
+  "product_name": "日系水手服套装 纯棉短袖上衣+百褶裙 学院风制服",
+  "product_description_for_prompt": "White sailor-style blouse with navy collar, red bow tie, floral embroidery, paired with navy pleated skirt, cotton material, school uniform style",
+  "product_type": "服装",
+  "garment_position": "full-body",
+  "visual_features": [
+    "sailor collar",
+    "pleated skirt"
+  ],
+  "selling_points": [
+    {
+      "icon": "fabric",
+      "zh": "纯棉材质",
+      "en": "Pure Cotton Fabric",
+      "zh_desc": "柔软透气，亲肤舒适",
+      "en_desc": "Soft breathable cotton",
+      "visual_keywords": [
+        "cotton",
+        "soft texture"
+      ]
+    },
+    {
+      "icon": "design",
+      "zh": "经典水手领设计",
+      "en": "Classic Sailor Collar",
+      "zh_desc": "海军风领口，学院感十足",
+      "en_desc": "Navy collar, academic style",
+      "visual_keywords": [
+        "sailor collar",
+        "navy trim"
+      ]
+    },
+    {
+      "icon": "design",
+      "zh": "精致刺绣花朵",
+      "en": "Embroidered Flower Detail",
+      "zh_desc": "胸前小花点缀，细节加分",
+      "en_desc": "Delicate flower embroidery",
+      "visual_keywords": [
+        "embroidery",
+        "floral motif"
+      ]
+    },
+    {
+      "icon": "fit",
+      "zh": "修身剪裁",
+      "en": "Tailored Fit",
+      "zh_desc": "合身版型，显瘦有型",
+      "en_desc": "Fitted silhouette",
+      "visual_keywords": [
+        "fitted",
+        "structured cut"
+      ]
+    }
+  ],
+  "target_audience": "青少年学生、cosplay爱好者、日系风格穿搭人群",
+  "target_scenes": [
+    "校园日常",
+    "角色扮演",
+    "摄影写真"
+  ],
+  "product_style": "日系可爱",
+  "color": "pure white, navy blue, red",
+  "material": "cotton",
+  "style": "修身",
+  "print_design": "胸前黑色小花刺绣图案",
+  "print_design_lock": "exact same black floral embroidery on chest center",
+  "product_name_zh": "水手服套装"
+}

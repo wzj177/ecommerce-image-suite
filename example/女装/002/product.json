@@ -1,0 +1,68 @@
+{
+  "product_name": "白色波点蕾丝边真丝吊带睡裙",
+  "product_description_for_prompt": "White satin slip dress with black polka dots, lace trim, thin straps, romantic design, soft fabric, elegant and feminine style",
+  "product_type": "服装",
+  "garment_position": "full-body",
+  "visual_features": [
+    "polka dot pattern",
+    "lace trim"
+  ],
+  "selling_points": [
+    {
+      "icon": "fabric",
+      "zh": "真丝质感",
+      "en": "Silk-like Fabric",
+      "zh_desc": "顺滑亲肤，高级光泽",
+      "en_desc": "Smooth, silky, luxurious sheen",
+      "visual_keywords": [
+        "satin",
+        "lustrous"
+      ]
+    },
+    {
+      "icon": "design",
+      "zh": "蕾丝点缀",
+      "en": "Lace Detailing",
+      "zh_desc": "精致花边，浪漫优雅",
+      "en_desc": "Delicate lace trim, romantic touch",
+      "visual_keywords": [
+        "lace trim",
+        "embellished"
+      ]
+    },
+    {
+      "icon": "fit",
+      "zh": "修身剪裁",
+      "en": "Fitted Silhouette",
+      "zh_desc": "贴合身形，显瘦有型",
+      "en_desc": "Flattering fit, enhances curves",
+      "visual_keywords": [
+        "fitted",
+        "slip dress"
+      ]
+    },
+    {
+      "icon": "comfort",
+      "zh": "舒适透气",
+      "en": "Comfortable Wear",
+      "zh_desc": "轻盈柔软，贴身无压",
+      "en_desc": "Lightweight, breathable, cozy",
+      "visual_keywords": [
+        "soft",
+        "lightweight"
+      ]
+    }
+  ],
+  "target_audience": "25-35岁追求精致生活、喜爱法式浪漫风格的都市女性",
+  "target_scenes": [
+    "居家休闲",
+    "睡前穿搭"
+  ],
+  "product_style": "法式浪漫",
+  "color": "pure white",
+  "material": "satin",
+  "style": "修身",
+  "print_design": "黑色波点印花",
+  "print_design_lock": "exact same black polka dot pattern on white background, evenly spaced",
+  "product_name_zh": "波点真丝睡裙"
+}

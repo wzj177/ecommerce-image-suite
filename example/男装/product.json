@@ -1,0 +1,68 @@
+{
+  "product_name": "纯棉圆领短袖T恤 白色宽松款",
+  "product_description_for_prompt": "white crew neck short sleeve t-shirt, plain design, soft cotton fabric, relaxed fit, clean minimalist style",
+  "product_type": "服装",
+  "garment_position": "top",
+  "visual_features": [
+    "纯白色",
+    "圆领设计"
+  ],
+  "selling_points": [
+    {
+      "icon": "fabric",
+      "zh": "优质纯棉",
+      "en": "Premium Cotton",
+      "zh_desc": "柔软亲肤，透气舒适",
+      "en_desc": "Soft breathable cotton fabric",
+      "visual_keywords": [
+        "cotton",
+        "soft"
+      ]
+    },
+    {
+      "icon": "fit",
+      "zh": "宽松版型",
+      "en": "Relaxed Fit",
+      "zh_desc": "遮肉显瘦，自在随性",
+      "en_desc": "Comfortable loose silhouette",
+      "visual_keywords": [
+        "oversized",
+        "relaxed"
+      ]
+    },
+    {
+      "icon": "design",
+      "zh": "极简设计",
+      "en": "Minimalist Design",
+      "zh_desc": "百搭基础款，轻松驾驭",
+      "en_desc": "Clean look, versatile styling",
+      "visual_keywords": [
+        "plain",
+        "minimalist"
+      ]
+    },
+    {
+      "icon": "comfort",
+      "zh": "穿着舒适",
+      "en": "Ultra Comfort",
+      "zh_desc": "贴身无束缚感",
+      "en_desc": "Smooth and comfortable wear",
+      "visual_keywords": [
+        "comfortable",
+        "smooth"
+      ]
+    }
+  ],
+  "target_audience": "追求简约时尚的都市年轻男女，注重基础款穿搭品质",
+  "target_scenes": [
+    "日常通勤",
+    "休闲居家"
+  ],
+  "product_style": "简约商务",
+  "color": "pure white",
+  "material": "棉",
+  "style": "宽松",
+  "print_design": "无印花",
+  "print_design_lock": "no print, plain solid color",
+  "product_name_zh": "纯白T恤"
+}

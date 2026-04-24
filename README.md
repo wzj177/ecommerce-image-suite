@@ -178,3 +178,8 @@ python3 scripts/check_providers.py
 
 1. [样例展示](./EXAMPLES.md)
 2. [商务合作](./BUSINESS.md)
+
+
+## 友情链接
+
+[![LINUXDO](https://img.shields.io/badge/%E7%A4%BE%E5%8C%BA-LINUXDO-0086c9?style=for-the-badge&labelColor=555555)](https://linux.do)
